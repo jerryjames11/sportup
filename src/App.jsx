@@ -9,7 +9,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Firebase SDK (loaded via CDN in useEffect) ───────────────────────────────
-console.log("ENV CHECK:", import.meta.env.VITE_FIREBASE_API_KEY);
 let firebaseApp, db, auth, googleProvider;
 let firestoreReady = false;
 
