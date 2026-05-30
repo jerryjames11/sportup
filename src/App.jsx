@@ -1,4 +1,51 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Component } from "react";
+
+// ─── Error Boundary ──────────────────────────────────────────────────────────
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error("SportUp error:", error, info); }
+  render() {
+    if (!this.state.hasError) return this.props.children;
+    return (
+      <div style={{minHeight:"100vh",background:"#0A0A0F",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,textAlign:"center"}}>
+        <div style={{fontSize:48,marginBottom:16}}>⚡</div>
+        <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:22,color:"#fff",marginBottom:8,letterSpacing:-.5}}>Something went wrong</div>
+        <p style={{color:"rgba(255,255,255,.5)",fontSize:14,marginBottom:28,maxWidth:300}}>SportUp hit an unexpected error. Check your connection and try again.</p>
+        <button onClick={()=>{ this.setState({hasError:false,error:null}); window.location.reload(); }}
+          style={{padding:"12px 28px",borderRadius:99,border:"none",background:"#F4530D",color:"#fff",fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:15,cursor:"pointer"}}>
+          Reload app
+        </button>
+        {this.state.error && <p style={{marginTop:20,fontSize:11,color:"rgba(255,255,255,.2)",fontFamily:"monospace",maxWidth:320,wordBreak:"break-all"}}>{String(this.state.error).slice(0,120)}</p>}
+      </div>
+    );
+  }
+}
+
+// ─── Skeleton loader ──────────────────────────────────────────────────────────
+function Skeleton({ width="100%", height=16, radius=8, style={} }) {
+  return (
+    <div style={{width,height,borderRadius:radius,background:"rgba(255,255,255,.07)",position:"relative",overflow:"hidden",...style}}>
+      <div style={{position:"absolute",top:0,left:"-100%",width:"100%",height:"100%",background:"linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent)",animation:"sk-shimmer 1.4s infinite"}}/>
+      <style dangerouslySetInnerHTML={{__html:"@keyframes sk-shimmer{0%{left:-100%}100%{left:100%}}"}}/>
+    </div>
+  );
+}
+
+function EventCardSkeleton() {
+  return (
+    <div style={{background:"rgba(255,255,255,.05)",border:"1.5px solid rgba(255,255,255,.08)",borderRadius:16,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
+      <div style={{display:"flex",gap:8,marginBottom:12}}><Skeleton width={80} height={22} radius={99}/></div>
+      <Skeleton width="65%" height={20} radius={6} style={{marginBottom:10}}/>
+      <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
+        <Skeleton width="50%" height={13} radius={4}/>
+        <Skeleton width="70%" height={13} radius={4}/>
+        <Skeleton width="40%" height={13} radius={4}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end"}}><Skeleton width={70} height={13} radius={4}/></div>
+    </div>
+  );
+}
 
 //
 const SPORTS = [
@@ -193,24 +240,34 @@ function matchLoser(m) { const w = matchWinner(m); return w ? (w.uid===m.a.uid ?
 function MapView({ lat, lng, label }) {
   const ref = useRef(null);
   const inst = useRef(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState(false);
   useEffect(() => {
     if (!ref.current || inst.current) return;
     const init = async () => {
-      if (!window.L) {
-        const lnk = document.createElement("link"); lnk.rel="stylesheet"; lnk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"; document.head.appendChild(lnk);
-        await new Promise(res => { const s=document.createElement("script"); s.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; s.onload=res; document.head.appendChild(s); });
-      }
-      if (!ref.current) return;
-      const map = window.L.map(ref.current,{zoomControl:true,scrollWheelZoom:false}).setView([lat,lng],15);
-      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",maxZoom:19}).addTo(map);
-      const icon = window.L.divIcon({html:`<div style="background:#E8590C;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:16px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)"></div>`,className:"",iconSize:[32,32],iconAnchor:[16,16]});
-      window.L.marker([lat,lng],{icon}).addTo(map).bindPopup(`<strong>${label}</strong>`).openPopup();
-      inst.current = map;
+      try {
+        if (!window.L) {
+          const lnk = document.createElement("link"); lnk.rel="stylesheet"; lnk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"; document.head.appendChild(lnk);
+          await new Promise((res,rej) => { const s=document.createElement("script"); s.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; s.onload=res; s.onerror=rej; document.head.appendChild(s); });
+        }
+        if (!ref.current) return;
+        const map = window.L.map(ref.current,{zoomControl:true,scrollWheelZoom:false}).setView([lat,lng],15);
+        window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",maxZoom:19}).addTo(map);
+        const icon = window.L.divIcon({html:`<div style="background:#E8590C;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:16px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)">⚡</div>`,className:"",iconSize:[32,32],iconAnchor:[16,16]});
+        window.L.marker([lat,lng],{icon}).addTo(map).bindPopup(`<strong>${label}</strong>`).openPopup();
+        inst.current = map; setMapReady(true);
+      } catch(e) { console.warn("Map failed to load:", e); setMapError(true); }
     };
     init();
     return () => { if (inst.current) { inst.current.remove(); inst.current=null; } };
   }, [lat, lng, label]);
-  return <div style={{borderRadius:12,overflow:"hidden",border:"1.5px solid #eee",height:200}}><div ref={ref} style={{width:"100%",height:"100%"}}/></div>;
+  return (
+    <div style={{borderRadius:12,overflow:"hidden",border:"1.5px solid rgba(255,255,255,.1)",height:200,position:"relative",background:"rgba(255,255,255,.04)"}}>
+      {!mapReady&&!mapError&&<div style={{position:"absolute",top:0,left:0,right:0,bottom:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,zIndex:1}}><div style={{fontSize:28}}>📍</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>Loading map...</div></div>}
+      {mapError&&<div style={{position:"absolute",top:0,left:0,right:0,bottom:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6}}><div style={{fontSize:28}}>📍</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)",textAlign:"center",padding:"0 16px",fontWeight:600}}>{label}</div><div style={{fontSize:11,color:"rgba(255,255,255,.25)"}}>Map unavailable -- check connection</div></div>}
+      <div ref={ref} style={{width:"100%",height:"100%"}}/>
+    </div>
+  );
 }
 
 //
@@ -1317,6 +1374,10 @@ function HomePage({ events, onOpen, setPage, mode, currentUser, prefs }) {
   const m = MODES[mode] || MODES.pickup;
   const [q, setQ] = useState("");
   const [sport, setSport] = useState("all");
+  const [loading, setLoading] = useState(true);
+
+  // Brief loading state so skeleton shows on slow connections instead of empty flash
+  useEffect(() => { const t = setTimeout(() => setLoading(false), 600); return () => clearTimeout(t); }, []);
 
   const hasLoc = prefs?.locCoords?.lat != null;
   const radius = prefs?.radius || 25;
@@ -1357,7 +1418,9 @@ function HomePage({ events, onOpen, setPage, mode, currentUser, prefs }) {
       </div>
       {/* Event cards */}
       <div style={{display:"grid",gap:14}}>
-        {filtered.length===0
+        {loading
+          ? [1,2,3].map(i => <EventCardSkeleton key={i}/>)
+          : filtered.length===0
           ? <div style={{textAlign:"center",padding:"50px 20px",color:"rgba(255,255,255,.3)"}}>
               <div style={{fontSize:40,marginBottom:12}}>{m.icon}</div>
               <div style={{fontWeight:600,color:"rgba(255,255,255,.5)",fontSize:16}}>No events found</div>
@@ -2011,7 +2074,7 @@ function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile
 }
 
 //
-export default function App() {
+function AppInner() {
   const [appState, setAppState] = useState("splash"); // splash | mode | app
   const [mode, setMode] = useState(() => load("su_mode", null)); // pickup | tournament | null
   const [events, setEvents] = useState(() => {
@@ -2142,5 +2205,13 @@ export default function App() {
         : page==="create" ? <CreatePage onCreated={onCreated} currentUser={user} onAuthRequired={()=>setShowAuth(true)} mode={mode}/>
         :                   <MyEventsPage events={modeEvents} currentUser={user} onOpen={openEvent} mode={mode}/>}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppInner />
+    </ErrorBoundary>
   );
 }
