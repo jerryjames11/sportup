@@ -4,9 +4,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 const SPORTS = [
   { id: "basketball",    label: "Basketball",    emoji: "🏀", color: "#E8590C", bg: "#FFF4EE" },
   { id: "soccer",        label: "Soccer",        emoji: "⚽", color: "#2B8A3E", bg: "#F0FBF4" },
-  { id: "volleyball",    label: "Volleyball",    emoji: "🏐", color: "#1971C2", bg: "#EEF5FF" },
+  { id: "volleyball",    label: "Volleyball",    emoji: "🏐", color: "#D4A017", bg: "#FFFBEB" },
   { id: "flagfootball",  label: "Flag Football", emoji: "🏈", color: "#9C36B5", bg: "#FAF0FF" },
-  { id: "pickleball",    label: "Pickleball",    emoji: "🏓", color: "#C92A2A", bg: "#FFF5F5" },
+  { id: "pickleball",    label: "Pickleball",    emoji: "🏓", color: "#1560BD", bg: "#EEF5FF" },
 ];
 const SPORT_MAP = Object.fromEntries(SPORTS.map(s => [s.id, s]));
 
@@ -16,7 +16,7 @@ const FORMATS = [
   { id: "robin",  label: "Round Robin",        desc: "Everyone plays everyone" },
 ];
 
-const SAMPLE_HOST_UID = "HOST_DEMO";
+const SAMPLE_HOST_UID = "sample-host-do-not-match";
 
 const SAMPLE_EVENTS = [
   { id:"e1", type:"pickup",     sport:"basketball",  title:"Sunday Morning Run",    date:"2026-06-01", time:"09:00", location:"Richardson Heights Park, TX",      lat:32.9656, lng:-96.7302, slots:10, participantType:"players", joined:[{uid:"u1",name:"Alex",email:"",phone:""},{uid:"u2",name:"Jordan",email:"",phone:""},{uid:"u3",name:"Sam",email:"",phone:""}],   host:{uid:SAMPLE_HOST_UID,name:"Marcus T."}, tournamentFormat:"single", deadline:null, description:"Fast-paced pickup run — all levels welcome!" },
@@ -77,12 +77,12 @@ async function getFirebase() {
   if (_fb) return _fb;
   // ── Replace these with your Firebase project values ──────────────────────
   const cfg = {
-    apiKey:            "AIzaSyCefrei0HG9R4oUX26vLaWGw2dhDMruT5o",
-    authDomain:        "sportup-xxxxx.firebaseapp.com",
-    projectId:         "sportup-xxxxx",
-    storageBucket:     "sportup-xxxxx.appspot.com",
-    messagingSenderId: "123456789012",
-    appId:             "1:123456789012:web:abcdef123456",
+    apiKey:            "REPLACE_WITH_YOUR_API_KEY",
+    authDomain:        "REPLACE_WITH_YOUR_AUTH_DOMAIN",
+    projectId:         "REPLACE_WITH_YOUR_PROJECT_ID",
+    storageBucket:     "REPLACE_WITH_YOUR_STORAGE_BUCKET",
+    messagingSenderId: "REPLACE_WITH_YOUR_MESSAGING_SENDER_ID",
+    appId:             "REPLACE_WITH_YOUR_APP_ID",
   };
   // ─────────────────────────────────────────────────────────────────────────
   const [app, auth, fs] = await Promise.all([
@@ -209,7 +209,7 @@ function MapView({ lat, lng, label }) {
 }
 
 // ─── Location search ──────────────────────────────────────────────────────────
-function LocationSearch({ value, onChange }) {
+function LocationSearch({ value, onChange, onTextChange }) {
   const [query, setQuery] = useState(() => value?.address || "");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -225,10 +225,17 @@ function LocationSearch({ value, onChange }) {
     setLoading(false);
   };
 
-  const onType = v => { setQuery(v); clearTimeout(timer.current); timer.current = setTimeout(() => search(v), 400); };
+  const onType = v => {
+    setQuery(v);
+    if (onTextChange) onTextChange(v);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => search(v), 400);
+  };
+
   const pick = r => {
     const addr = r.display_name.split(",").slice(0,3).join(", ");
     setQuery(addr); setResults([]);
+    if (onTextChange) onTextChange(addr);
     onChange({ address: addr, lat: parseFloat(r.lat), lng: parseFloat(r.lon) });
   };
 
@@ -735,31 +742,38 @@ function AuthModal({ onClose, onSignIn }) {
 // ─── Small UI bits ────────────────────────────────────────────────────────────
 function SportBadge({sportId}) {
   const s=SPORT_MAP[sportId]; if(!s) return null;
-  return <span style={{background:s.bg,color:s.color,padding:"3px 10px",borderRadius:99,fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4,border:`1px solid ${s.color}22`}}>{s.emoji} {s.label}</span>;
-}
-function TypeBadge({type}) {
-  const t=type==="tournament";
-  return <span style={{background:t?"#FFF3CD":"#E8F5E9",color:t?"#856404":"#2E7D32",padding:"3px 10px",borderRadius:99,fontSize:11,fontWeight:600}}>{t?"🏆 Tournament":"🎮 Pickup"}</span>;
-}
-
-function EventCard({event,onClick}) {
-  const s=SPORT_MAP[event.sport]||{color:"#888",bg:"#eee",emoji:"🏅"};
-  const left=event.slots-event.joined.length;
   return (
-    <div onClick={()=>onClick(event)} style={{background:"#fff",border:"1.5px solid #eee",borderRadius:16,padding:"18px 20px",cursor:"pointer",transition:"all .18s",position:"relative",overflow:"hidden"}}
-      onMouseEnter={e=>{e.currentTarget.style.borderColor=s.color;e.currentTarget.style.boxShadow=`0 4px 20px ${s.color}22`;}}
-      onMouseLeave={e=>{e.currentTarget.style.borderColor="#eee";e.currentTarget.style.boxShadow="none";}}>
-      <div style={{position:"absolute",top:0,right:0,width:60,height:60,background:s.bg,borderRadius:"0 16px 0 60px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>{s.emoji}</div>
-      <div style={{display:"flex",gap:6,marginBottom:10}}><TypeBadge type={event.type}/></div>
-      <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:17,color:"#111",marginBottom:6,paddingRight:50}}>{event.title}</div>
-      <div style={{fontSize:12,color:"#666",marginBottom:12,display:"flex",flexDirection:"column",gap:3}}>
+    <span style={{background:s.bg,color:s.color,padding:"3px 10px",borderRadius:99,fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4,border:`1px solid ${s.color}22`}}>
+      {sportId==="pickleball" ? <PickleballIcon size={14}/> : s.emoji} {s.label}
+    </span>
+  );
+}
+function EventCard({event,onClick,mode}) {
+  const s=SPORT_MAP[event.sport]||{color:"#888",bg:"#eee",emoji:"🏅"};
+  const m=MODES[mode]||MODES.pickup;
+  const left=event.slots-event.joined.length;
+  const [hov,setHov]=useState(false);
+  return (
+    <div onClick={()=>onClick(event)}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{background:hov?"rgba(255,255,255,.14)":"rgba(255,255,255,.09)",border:`1.5px solid ${hov?m.accent:"rgba(255,255,255,.15)"}`,borderRadius:16,padding:"18px 20px",cursor:"pointer",transition:"all .18s",position:"relative",overflow:"hidden",boxShadow:hov?`0 4px 24px ${m.accent}33`:"none"}}>
+      <div style={{position:"absolute",top:0,right:0,width:64,height:64,background:`${s.color}22`,borderRadius:"0 16px 0 64px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>
+        {event.sport==="pickleball" ? <PickleballIcon size={28}/> : s.emoji}
+      </div>
+      <div style={{display:"flex",gap:6,marginBottom:10}}>
+        <span style={{background:`${s.color}18`,color:s.color,padding:"3px 10px",borderRadius:99,fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
+          {event.sport==="pickleball" ? <PickleballIcon size={13}/> : s.emoji} {s.label}
+        </span>
+        {event.isPrivate&&<span style={{background:"rgba(255,255,255,.1)",color:"rgba(255,255,255,.6)",padding:"3px 10px",borderRadius:99,fontSize:11,fontWeight:600}}>🔒 Private</span>}
+      </div>
+      <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:17,color:"#fff",marginBottom:8,paddingRight:52}}>{event.title}</div>
+      <div style={{fontSize:12,color:"rgba(255,255,255,.5)",marginBottom:12,display:"flex",flexDirection:"column",gap:3}}>
         <span>📅 {event.date} · {event.time}</span>
         <span>📍 {event.location}</span>
         <span>👤 {event.host?.name||event.host}</span>
       </div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <SportBadge sportId={event.sport}/>
-        <span style={{fontSize:12,fontWeight:600,color:left>3?"#2B8A3E":left>0?"#E8590C":"#C92A2A"}}>{left>0?`${left} spot${left>1?"s":""} left`:"Full"}</span>
+      <div style={{display:"flex",justifyContent:"flex-end"}}>
+        <span style={{fontSize:12,fontWeight:700,color:left>3?"#4ADE80":left>0?"#FB923C":"#F87171"}}>{left>0?`${left} spot${left>1?"s":""} left`:"Full"}</span>
       </div>
     </div>
   );
@@ -943,8 +957,69 @@ function ContactsTab({ event }) {
   );
 }
 
+// ─── Edit Event Modal ─────────────────────────────────────────────────────────
+function EditEventModal({ event, onSave, onClose }) {
+  const [form, setForm] = useState({
+    title: event.title,
+    date: event.date,
+    time: event.time,
+    location: event.location,
+    slots: event.slots,
+    description: event.description || "",
+    deadline: event.deadline ? event.deadline.slice(0,16) : "",
+    isPrivate: event.isPrivate || false,
+  });
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const inp = {width:"100%",padding:"10px 13px",borderRadius:10,border:"1.5px solid #ddd",fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
+  const lbl = {fontSize:12,fontWeight:700,color:"#777",textTransform:"uppercase",letterSpacing:.5,display:"block",marginBottom:5};
+
+  const save = () => {
+    if(!form.title||!form.date||!form.location){alert("Title, date, and location are required.");return;}
+    onSave({...event,...form,slots:Number(form.slots),deadline:form.deadline?new Date(form.deadline).toISOString():null});
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:"#fff",borderRadius:20,padding:"26px 24px",width:480,maxWidth:"96vw",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:20,color:"#111",marginBottom:20,letterSpacing:-.5}}>✏️ Edit event</div>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div><label style={lbl}>Title</label><input value={form.title} onChange={e=>set("title",e.target.value)} style={inp}/></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div><label style={lbl}>Date</label><input type="date" value={form.date} onChange={e=>set("date",e.target.value)} style={inp}/></div>
+            <div><label style={lbl}>Time</label><input type="time" value={form.time} onChange={e=>set("time",e.target.value)} style={inp}/></div>
+          </div>
+          <div><label style={lbl}>Location</label><input value={form.location} onChange={e=>set("location",e.target.value)} placeholder="Park, address, or venue" style={inp}/></div>
+          <div><label style={lbl}>{event.type==="tournament"?"Slots":"Player slots"}</label><input type="number" min={event.joined.length||1} max={256} value={form.slots} onChange={e=>set("slots",e.target.value)} style={{...inp,width:100}}/></div>
+          <div>
+            <label style={lbl}>Registration deadline <span style={{color:"#bbb",fontWeight:400,textTransform:"none",fontSize:11}}>(optional)</span></label>
+            <input type="datetime-local" value={form.deadline} onChange={e=>set("deadline",e.target.value)} style={inp}/>
+          </div>
+          <div><label style={lbl}>Description</label><textarea value={form.description} onChange={e=>set("description",e.target.value)} rows={3} style={{...inp,resize:"vertical"}}/></div>
+          <div>
+            <label style={lbl}>Visibility</label>
+            <div style={{display:"flex",gap:10}}>
+              {[{val:false,icon:"🌐",label:"Public",desc:"Visible in browse"},{val:true,icon:"🔒",label:"Private",desc:"Link only"}].map(opt=>(
+                <button key={String(opt.val)} onClick={()=>set("isPrivate",opt.val)}
+                  style={{flex:1,padding:"9px 12px",borderRadius:9,border:`2px solid ${form.isPrivate===opt.val?"#111":"#ddd"}`,background:form.isPrivate===opt.val?"#111":"#fff",color:form.isPrivate===opt.val?"#fff":"#555",cursor:"pointer",textAlign:"left"}}>
+                  <div style={{fontSize:15}}>{opt.icon}</div>
+                  <div style={{fontSize:13,fontWeight:700,marginTop:2}}>{opt.label}</div>
+                  <div style={{fontSize:11,color:form.isPrivate===opt.val?"rgba(255,255,255,.6)":"#aaa"}}>{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:10,marginTop:20}}>
+          <button onClick={onClose} style={{flex:1,padding:10,borderRadius:10,border:"1.5px solid #ddd",background:"#fff",color:"#555",fontWeight:600,fontSize:14,cursor:"pointer"}}>Cancel</button>
+          <button onClick={save} style={{flex:2,padding:10,borderRadius:10,border:"none",background:"#111",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Save changes</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Event detail ─────────────────────────────────────────────────────────────
-function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSlots, onUpdateDeadline, onUpdatePlayers, onBack, onAuthRequired }) {
+function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSlots, onUpdateDeadline, onUpdatePlayers, onUpdateEvent, onBack, onAuthRequired }) {
   const s = SPORT_MAP[event.sport] || { color:"#888", bg:"#eee", label:"Sport", emoji:"🏅" };
   const pt = event.participantType || (event.type==="tournament"?"teams":"players");
   const ptSingular = pt==="teams"?"team":"player";
@@ -957,6 +1032,7 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
 
   const [confirmRemove, setConfirmRemove] = useState(null); // { uid, name }
   const [showCancel, setShowCancel] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [tab, setTab] = useState("info");
   const [showJoin, setShowJoin] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -1001,6 +1077,7 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
     <div style={{maxWidth:660,margin:"0 auto",padding:"24px 16px"}}>
       {showJoin&&<JoinModal event={event} currentUser={currentUser} onConfirm={p=>{onJoin(event.id,p);setShowJoin(false);}} onClose={()=>setShowJoin(false)}/>}
       {showAdd&&<HostAddModal event={event} onConfirm={p=>{onJoin(event.id,p);setShowAdd(false);}} onClose={()=>setShowAdd(false)}/>}
+      {showEdit&&<EditEventModal event={event} onSave={ev=>{onUpdateEvent(ev);setShowEdit(false);}} onClose={()=>setShowEdit(false)}/>}
 
       <button onClick={onBack} style={{background:"none",border:"none",color:"#888",fontSize:13,cursor:"pointer",marginBottom:16,display:"flex",alignItems:"center",gap:4,fontFamily:"inherit"}}>← Back</button>
 
@@ -1047,8 +1124,11 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
 
       <div style={{background:"#fff",border:"1.5px solid #eee",borderRadius:20,overflow:"hidden"}}>
         <div style={{background:s.bg,padding:"24px 24px 0",borderBottom:"1.5px solid #eee"}}>
-          <div style={{display:"flex",gap:8,marginBottom:10}}><TypeBadge type={event.type}/><SportBadge sportId={event.sport}/></div>
-          <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:24,color:"#111",letterSpacing:-.5}}>{event.title}</div>
+          <div style={{display:"flex",gap:8,marginBottom:10}}><SportBadge sportId={event.sport}/></div>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
+            <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:24,color:"#111",letterSpacing:-.5}}>{event.title}</div>
+            {isHost&&<button onClick={()=>setShowEdit(true)} style={{flexShrink:0,marginTop:4,padding:"5px 12px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>✏️ Edit</button>}
+          </div>
           <div style={{fontSize:13,color:"#666",marginTop:6,marginBottom:16,lineHeight:1.8}}>
             <div>📅 {event.date} · {event.time}</div>
             <div>📍 {event.location}</div>
@@ -1065,10 +1145,38 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
               {event.description&&<div><div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>About</div><p style={{fontSize:14,color:"#444",lineHeight:1.65,margin:0}}>{event.description}</p></div>}
               {event.lat&&<div><div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Location</div><MapView lat={event.lat} lng={event.lng} label={event.location}/></div>}
 
-              {/* Share */}
-              <div style={{background:"#F7F7F5",border:"1.5px solid #eee",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
-                <div style={{flex:1,minWidth:0}}><div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Shareable link</div><div style={{fontSize:12,color:"#555",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{shareLink}</div></div>
-                <button onClick={copyLink} style={{flexShrink:0,padding:"7px 14px",borderRadius:8,border:"1.5px solid #ddd",background:shareToast?"#2B8A3E":"#fff",color:shareToast?"#fff":"#111",fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s",whiteSpace:"nowrap"}}>{shareToast?"✅ Copied!":"📋 Copy link"}</button>
+              {/* Share + Privacy */}
+              <div style={{background:"#F7F7F5",border:"1.5px solid #eee",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
+                {/* Privacy toggle — host only */}
+                {isHost && (
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,flex:1}}>Visibility</span>
+                    <div style={{display:"flex",gap:6}}>
+                      {[{val:false,icon:"🌐",label:"Public"},{val:true,icon:"🔒",label:"Private"}].map(opt=>(
+                        <button key={String(opt.val)} onClick={()=>onUpdateEvent({...event,isPrivate:opt.val})}
+                          style={{padding:"4px 12px",borderRadius:7,border:`1.5px solid ${event.isPrivate===opt.val?"#111":"#ddd"}`,background:event.isPrivate===opt.val?"#111":"#fff",color:event.isPrivate===opt.val?"#fff":"#666",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+                          {opt.icon} {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Privacy status badge for non-hosts */}
+                {!isHost && event.isPrivate && (
+                  <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#856404",fontWeight:600}}>
+                    🔒 Private event — invite only
+                  </div>
+                )}
+                {/* Shareable link */}
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>
+                      {event.isPrivate ? "🔒 Private link — share to invite" : "Shareable link"}
+                    </div>
+                    <div style={{fontSize:12,color:"#555",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{shareLink}</div>
+                  </div>
+                  <button onClick={copyLink} style={{flexShrink:0,padding:"7px 14px",borderRadius:8,border:"1.5px solid #ddd",background:shareToast?"#2B8A3E":"#fff",color:shareToast?"#fff":"#111",fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s",whiteSpace:"nowrap"}}>{shareToast?"✅ Copied!":"📋 Copy link"}</button>
+                </div>
               </div>
 
               {/* Deadline (host only) */}
@@ -1121,12 +1229,12 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
                 })}
                 {Array(Math.max(0,spotsLeft)).fill(null).map((_,i)=>(
                   <div key={"o"+i} style={{display:"flex",alignItems:"center",gap:8,background:"#fafafa",border:"1.5px dashed #e0e0e0",borderRadius:10,padding:"8px 12px",marginBottom:6}}>
-                    <span style={{fontSize:13,color:"#ccc"}}>— Open spot</span>
+                    <span style={{fontSize:13,color:"#ccc",flex:1}}>— Open spot</span>
+                    {isHost&&<button onClick={()=>setShowAdd(true)} style={{fontSize:11,color:"#856404",background:"#FFFBEB",border:"1px solid #FFD43B88",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontWeight:600,whiteSpace:"nowrap"}}>✏️ Add {ptSingular}</button>}
                   </div>
                 ))}
 
-                {isHost&&spotsLeft>0&&<button onClick={()=>setShowAdd(true)} style={{width:"100%",padding:10,borderRadius:10,border:"1.5px dashed #FFD43B",background:"#FFFBEB",color:"#856404",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:4}}>✏️ Add {ptSingular} manually</button>}
-                {isHost&&spotsLeft===0&&<div style={{fontSize:12,color:"#aaa",textAlign:"center",marginBottom:4}}>Full — increase capacity above</div>}
+                {isHost&&spotsLeft===0&&<div style={{fontSize:12,color:"#aaa",textAlign:"center",marginBottom:4}}>Full — increase capacity above to add more</div>}
 
                 {spotsLeft>0&&!isIn&&!isHost&&!pastDL&&<button onClick={()=>{if(!currentUser){onAuthRequired();return;}setShowJoin(true);}} style={{width:"100%",padding:11,borderRadius:10,border:"none",background:s.color,color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>{event.type==="tournament"?`Register ${ptSingular} →`:"Join game →"}</button>}
                 {spotsLeft>0&&!isIn&&!isHost&&pastDL&&<div style={{textAlign:"center",fontSize:13,color:"#C92A2A",fontWeight:600,padding:10,background:"#FFF5F5",borderRadius:10}}>🔒 Registration closed</div>}
@@ -1155,106 +1263,293 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
 }
 
 // ─── NavBar ───────────────────────────────────────────────────────────────────
-function NavBar({ page, setPage, count, user, onAuth, onSignOut }) {
-  const tabs = [{id:"home",label:"Browse",icon:"🔍"},{id:"create",label:"Create",icon:"➕"},{id:"my",label:"My Events",icon:"🗓️"}];
+
+// ─── Custom sport filter dropdown (supports SVG icons) ────────────────────────
+function SportFilter({ value, onChange, surfaceBg, surfaceBorder }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const options = [
+    { id:"all", label:"All events", icon:null },
+    ...SPORTS.map(s => ({ id:s.id, label:s.label, emoji:s.emoji, color:s.color })),
+  ];
+  const selected = options.find(o => o.id === value) || options[0];
+
   return (
-    <nav style={{position:"sticky",top:0,zIndex:100,background:"rgba(255,255,255,.95)",backdropFilter:"blur(10px)",borderBottom:"1px solid #eee",display:"flex",alignItems:"center",padding:"0 16px",height:56,gap:8}}>
-      <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:20,color:"#111",marginRight:"auto",letterSpacing:-.5,whiteSpace:"nowrap"}}>⚡ SportUp</div>
-      <div style={{display:"flex",gap:3}}>
-        {tabs.map(t=>(
-          <button key={t.id} onClick={()=>setPage(t.id)} style={{background:page===t.id?"#111":"transparent",color:page===t.id?"#fff":"#555",border:"none",borderRadius:8,padding:"6px 12px",fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:4,transition:"all .15s"}}>
-            <span>{t.icon}</span><span>{t.label}</span>
-            {t.id==="my"&&count>0&&<span style={{background:"#E8590C",color:"#fff",borderRadius:99,fontSize:10,padding:"1px 5px",fontWeight:700}}>{count}</span>}
-          </button>
-        ))}
-      </div>
-      {user
-        ? <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:4}}>
-            <div style={{width:30,height:30,borderRadius:"50%",background:"#111",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#fff",flexShrink:0,overflow:"hidden"}}>
-              {user.photo?<img src={user.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:(user.displayName?.[0]||"U").toUpperCase()}
-            </div>
-            <button onClick={onSignOut} style={{fontSize:12,color:"#999",background:"none",border:"none",cursor:"pointer",padding:0}}>Sign out</button>
-          </div>
-        : <button onClick={onAuth} style={{padding:"6px 14px",borderRadius:8,border:"1.5px solid #111",background:"#111",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Sign in</button>}
-    </nav>
+    <div ref={ref} style={{position:"relative"}}>
+      <button onClick={()=>setOpen(o=>!o)}
+        style={{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:9,border:`1px solid ${surfaceBorder}`,fontSize:13,background:surfaceBg,color:"#fff",cursor:"pointer",fontFamily:"inherit",outline:"none",whiteSpace:"nowrap"}}>
+        {selected.id==="pickleball" ? <PickleballIcon size={16}/> : selected.emoji ? <span>{selected.emoji}</span> : null}
+        {selected.label}
+        <span style={{marginLeft:4,opacity:.5,fontSize:10}}>▾</span>
+      </button>
+      {open && (
+        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,minWidth:160,background:"#1a1a2e",border:`1px solid ${surfaceBorder}`,borderRadius:10,overflow:"hidden",zIndex:200,boxShadow:"0 8px 24px rgba(0,0,0,.4)"}}>
+          {options.map(o => (
+            <button key={o.id} onClick={()=>{onChange(o.id);setOpen(false);}}
+              style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"9px 14px",background:value===o.id?"rgba(255,255,255,.12)":"transparent",color:"#fff",border:"none",fontSize:13,fontFamily:"inherit",cursor:"pointer",textAlign:"left",transition:"background .12s"}}
+              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.08)"}
+              onMouseLeave={e=>e.currentTarget.style.background=value===o.id?"rgba(255,255,255,.12)":"transparent"}>
+              {o.id==="pickleball" ? <PickleballIcon size={16}/> : o.emoji ? <span style={{fontSize:16}}>{o.emoji}</span> : null}
+              {o.label}
+              {value===o.id && <span style={{marginLeft:"auto",fontSize:11,opacity:.6}}>✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
 // ─── Home ─────────────────────────────────────────────────────────────────────
-function HomePage({ events, onOpen, setPage }) {
+function HomePage({ events, onOpen, setPage, mode, currentUser, prefs }) {
+  const m = MODES[mode] || MODES.pickup;
   const [q, setQ] = useState("");
   const [sport, setSport] = useState("all");
-  const [type, setType] = useState("all");
+
+  const hasLoc = prefs?.locCoords?.lat != null;
+  const radius = prefs?.radius || 25;
+
   const filtered = events.filter(e => {
+    if (e.isPrivate) {
+      if (!currentUser) return false;
+      if (e.host?.uid !== currentUser.uid && !e.joined?.some(j=>j.uid===currentUser.uid)) return false;
+    }
     const ql=q.toLowerCase();
-    return (e.title.toLowerCase().includes(ql)||e.location.toLowerCase().includes(ql))&&(sport==="all"||e.sport===sport)&&(type==="all"||e.type===type);
+    if (!(e.title.toLowerCase().includes(ql)||e.location.toLowerCase().includes(ql))) return false;
+    if (sport!=="all"&&e.sport!==sport) return false;
+    if (hasLoc && e.lat && e.lng) {
+      const d = distanceMiles(prefs.locCoords.lat, prefs.locCoords.lng, e.lat, e.lng);
+      if (d > radius) return false;
+    }
+    return true;
   });
+  const surfaceBg = "rgba(255,255,255,.11)";
+  const surfaceBorder = "rgba(255,255,255,.18)";
   return (
-    <div style={{maxWidth:700,margin:"0 auto",padding:"24px 16px"}}>
-      <div style={{marginBottom:20}}><h1 style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:28,color:"#111",margin:"0 0 4px",letterSpacing:-1}}>Find your next game</h1><p style={{color:"#888",fontSize:14,margin:0}}>Browse pickup games and tournaments near you</p></div>
-      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍  Search by title or location…" style={{width:"100%",padding:"12px 16px",borderRadius:12,border:"1.5px solid #ddd",fontSize:14,outline:"none",marginBottom:12,boxSizing:"border-box",fontFamily:"inherit"}}/>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:20}}>
-        <select value={sport} onChange={e=>setSport(e.target.value)} style={{padding:"7px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,background:"#fff",cursor:"pointer",fontFamily:"inherit"}}>
-          <option value="all">All sports</option>
-          {SPORTS.map(s=><option key={s.id} value={s.id}>{s.emoji} {s.label}</option>)}
-        </select>
-        <select value={type} onChange={e=>setType(e.target.value)} style={{padding:"7px 12px",borderRadius:9,border:"1.5px solid #ddd",fontSize:13,background:"#fff",cursor:"pointer",fontFamily:"inherit"}}>
-          <option value="all">All types</option><option value="pickup">🎮 Pickup</option><option value="tournament">🏆 Tournament</option>
-        </select>
-        <div style={{marginLeft:"auto",fontSize:13,color:"#888",display:"flex",alignItems:"center"}}>{filtered.length} event{filtered.length!==1?"s":""}</div>
+    <div style={{maxWidth:700,margin:"0 auto",padding:"28px 16px"}}>
+      <div style={{marginBottom:24}}>
+        <h1 style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:30,color:"#fff",margin:"0 0 6px",letterSpacing:-1}}>
+          {mode==="pickup" ? "Find a pickup event" : "Find a tournament"}
+        </h1>
+        <p style={{color:"rgba(255,255,255,.45)",fontSize:14,margin:0}}>
+          {hasLoc ? `📍 Within ${radius} mi of ${prefs.locLabel}` : m.tagline}
+        </p>
       </div>
+      {/* Search bar — lighter than bg */}
+      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍  Search by title or location…"
+        style={{padding:"12px 16px",borderRadius:12,border:`1.5px solid ${surfaceBorder}`,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit",background:surfaceBg,color:"#fff",width:"100%"}}/>
+      {/* Filter row */}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",margin:"12px 0 20px",alignItems:"center"}}>
+        <SportFilter value={sport} onChange={setSport} surfaceBg={surfaceBg} surfaceBorder={surfaceBorder}/>
+        <div style={{marginLeft:"auto",fontSize:13,color:"rgba(255,255,255,.4)",display:"flex",alignItems:"center"}}>{filtered.length} event{filtered.length!==1?"s":""}</div>
+      </div>
+      {/* Event cards */}
       <div style={{display:"grid",gap:14}}>
         {filtered.length===0
-          ? <div style={{textAlign:"center",padding:"40px 20px",color:"#aaa"}}><div style={{fontSize:40,marginBottom:10}}>🎯</div><div style={{fontWeight:600}}>No events found</div><div style={{fontSize:13,marginTop:4}}>Try adjusting your filters or <span style={{color:"#E8590C",cursor:"pointer",textDecoration:"underline"}} onClick={()=>setPage("create")}>create one!</span></div></div>
-          : filtered.map(e=><EventCard key={e.id} event={e} onClick={()=>onOpen(e)}/>)}
+          ? <div style={{textAlign:"center",padding:"50px 20px",color:"rgba(255,255,255,.3)"}}>
+              <div style={{fontSize:40,marginBottom:12}}>{m.icon}</div>
+              <div style={{fontWeight:600,color:"rgba(255,255,255,.5)",fontSize:16}}>No events found</div>
+              <div style={{fontSize:13,marginTop:8}}>Be the first — <span style={{color:m.accent,cursor:"pointer",fontWeight:600}} onClick={()=>setPage("create")}>create one!</span></div>
+            </div>
+          : filtered.map(e=><EventCard key={e.id} event={e} onClick={()=>onOpen(e)} mode={mode}/>)}
+      </div>
+    </div>
+  );
+}
+
+// ─── Sport picker (pickup create flow) ────────────────────────────────────────
+// Pickleball icon — two crossed blue paddles + yellow ball (like reference image)
+function PickleballIcon({ size=28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Left paddle — shifted right toward center */}
+      <g transform="rotate(-28 20 28)">
+        <rect x="7" y="8" width="14" height="16" rx="4" fill="#1560BD" stroke="#0A3D8F" strokeWidth="0.6"/>
+        <rect x="12.5" y="22.5" width="3" height="7" rx="1.5" fill="#7B4A1E"/>
+      </g>
+      {/* Right paddle — shifted left toward center */}
+      <g transform="rotate(28 20 28)">
+        <rect x="19" y="8" width="14" height="16" rx="4" fill="#1560BD" stroke="#0A3D8F" strokeWidth="0.6"/>
+        <rect x="24.5" y="22.5" width="3" height="7" rx="1.5" fill="#7B4A1E"/>
+      </g>
+      {/* Ball — nestled in V, no contact */}
+      <circle cx="20" cy="14" r="5" fill="#F5D200" stroke="#C8A000" strokeWidth="0.7"/>
+      <circle cx="18.2" cy="12.5" r="0.85" fill="#C8A000" opacity="0.7"/>
+      <circle cx="21.8" cy="12.5" r="0.85" fill="#C8A000" opacity="0.7"/>
+      <circle cx="20"   cy="15.5" r="0.85" fill="#C8A000" opacity="0.7"/>
+      <circle cx="17.8" cy="15.2" r="0.65" fill="#C8A000" opacity="0.5"/>
+      <circle cx="22.2" cy="15.2" r="0.65" fill="#C8A000" opacity="0.5"/>
+      <circle cx="20"   cy="11.2" r="0.65" fill="#C8A000" opacity="0.5"/>
+    </svg>
+  );
+}
+
+// Benchpress + spotter icon
+function BenchpressIcon({ size=24 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Barbell */}
+      <rect x="4" y="12" width="28" height="3" rx="1.5" fill="currentColor" opacity="0.8"/>
+      {/* Left weight plate */}
+      <rect x="2" y="9" width="4" height="9" rx="1.5" fill="currentColor"/>
+      {/* Right weight plate */}
+      <rect x="30" y="9" width="4" height="9" rx="1.5" fill="currentColor"/>
+      {/* Lifter torso — lying on bench */}
+      <rect x="10" y="14" width="12" height="5" rx="2" fill="currentColor" opacity="0.7"/>
+      {/* Arms pushing up */}
+      <line x1="14" y1="14" x2="14" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      <line x1="22" y1="14" x2="22" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      {/* Bench */}
+      <rect x="9" y="19" width="14" height="2.5" rx="1" fill="currentColor" opacity="0.5"/>
+      {/* Spotter head */}
+      <circle cx="18" cy="6" r="2.5" fill="currentColor" opacity="0.85"/>
+      {/* Spotter hands on bar */}
+      <line x1="14" y1="8" x2="14" y2="12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+      <line x1="22" y1="8" x2="22" y2="12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+const WELLNESS_EVENTS = [
+  { id:"cardio",  label:"Cardio",  icon:"🏃", color:"#E8590C" },
+  { id:"gym",     label:"Gym Sesh",icon:null,  color:"#7B2FBE", svgIcon:"benchpress" },
+  { id:"cycling", label:"Cycling", icon:"🚴", color:"#D4A017" },
+  { id:"walk",    label:"Walk",    icon:"🚶", color:"#2B8A3E" },
+  { id:"yoga",    label:"Yoga",    icon:"🧘", color:"#1560BD" },
+];
+
+function SportPicker({ mode, onPick }) {
+  const m = MODES[mode] || MODES.pickup;
+  return (
+    <div style={{maxWidth:620,margin:"0 auto",padding:"32px 16px"}}>
+      <h1 style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:26,color:"#fff",margin:"0 0 8px",letterSpacing:-1}}>What event?</h1>
+      <p style={{color:"rgba(255,255,255,.4)",fontSize:14,margin:"0 0 28px"}}>Pick an event to get started</p>
+
+      {/* Sports bubbles */}
+      <div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,.35)",textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>Sports</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:12,justifyContent:"center",marginBottom:28}}>
+        {SPORTS.map(s => {
+          return (
+            <button key={s.id} onClick={()=>onPick(s.id)}
+              style={{padding:"13px 20px",borderRadius:99,border:`2px solid ${s.color}55`,background:`${s.color}18`,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8,transition:"all .18s",boxShadow:`0 2px 12px ${s.color}22`}}
+              onMouseEnter={e=>{e.currentTarget.style.background=`${s.color}44`;e.currentTarget.style.borderColor=s.color;e.currentTarget.style.transform="scale(1.06)";}}
+              onMouseLeave={e=>{e.currentTarget.style.background=`${s.color}18`;e.currentTarget.style.borderColor=`${s.color}55`;e.currentTarget.style.transform="scale(1)";}}>
+              {s.id==="pickleball"
+                ? <span style={{display:"flex",alignItems:"center"}}><PickleballIcon size={22}/></span>
+                : <span style={{fontSize:22}}>{s.emoji}</span>}
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Custom event button — white */}
+      <div style={{textAlign:"center",marginBottom:28}}>
+        <button onClick={()=>onPick("custom")}
+          style={{padding:"13px 32px",borderRadius:12,border:"1.5px solid rgba(255,255,255,.6)",background:"#fff",color:"#111",fontSize:14,fontWeight:700,cursor:"pointer",transition:"all .18s"}}
+          onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,.9)";e.currentTarget.style.transform="scale(1.03)";}}
+          onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.transform="scale(1)";}}>
+          ✏️ Custom event
+        </button>
+      </div>
+
+      {/* Wellness / activity bubbles */}
+      <div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,.35)",textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>Activities</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:12,justifyContent:"center"}}>
+        {WELLNESS_EVENTS.map(w => {
+          return (
+            <button key={w.id} onClick={()=>onPick(w.id)}
+              style={{padding:"13px 20px",borderRadius:99,border:`2px solid ${w.color}55`,background:`${w.color}18`,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8,transition:"all .18s",boxShadow:`0 2px 12px ${w.color}22`}}
+              onMouseEnter={e=>{e.currentTarget.style.background=`${w.color}44`;e.currentTarget.style.borderColor=w.color;e.currentTarget.style.transform="scale(1.06)";}}
+              onMouseLeave={e=>{e.currentTarget.style.background=`${w.color}18`;e.currentTarget.style.borderColor=`${w.color}55`;e.currentTarget.style.transform="scale(1)";}}>
+              {w.svgIcon==="benchpress"
+                ? <span style={{display:"flex",alignItems:"center",color:"#fff"}}><BenchpressIcon size={24}/></span>
+                : <span style={{fontSize:22}}>{w.icon}</span>}
+              {w.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
-function CreatePage({ onCreated, currentUser, onAuthRequired }) {
-  const [form, setForm] = useState({title:"",sport:"basketball",type:"pickup",date:"",time:"",locObj:null,slots:10,description:"",tournamentFormat:"single",participantType:"teams",deadline:""});
+function CreatePage({ onCreated, currentUser, onAuthRequired, mode }) {
+  const m = MODES[mode] || MODES.pickup;
+  const lockedType = mode === "pickup" ? "pickup" : "tournament";
+  const isPickup = mode === "pickup";
+
+  // For pickup: start with sport picker; null = not yet chosen
+  const [chosenSport, setChosenSport] = useState(() => isPickup ? null : "basketball");
+
+  const [form, setForm] = useState({title:"",sport:"basketball",type:lockedType,date:"",time:"",locObj:null,locText:"",slots:10,description:"",tournamentFormat:"single",participantType:"teams",deadline:"",isPrivate:false});
   const [aiLoad, setAiLoad] = useState(false);
   const [saved, setSaved] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
+  const pickSport = (sportId) => {
+    setChosenSport(sportId);
+    const isKnownSport = !!SPORT_MAP[sportId];
+    const wellnessEvent = WELLNESS_EVENTS?.find(w => w.id === sportId);
+    set("sport", isKnownSport ? sportId : (wellnessEvent?.label || sportId));
+  };
+
   const genAI = async () => {
     setAiLoad(true);
-    const sl=SPORT_MAP[form.sport]?.label||form.sport;
+    const sl = chosenSport === "custom" ? "custom sport" : (SPORT_MAP[form.sport]?.label || form.sport);
     try { const t=await callClaude(`Write a short exciting 2-sentence description for a ${form.type==="tournament"?"tournament":"pickup game"} of ${sl}. Energetic, welcoming. Under 80 words.`); set("description",t.trim()); }
-    catch { set("description",`Join us for a great ${sl} ${form.type}! All levels welcome.`); }
+    catch { set("description",`Join us for a great pickup game! All levels welcome.`); }
     setAiLoad(false);
   };
 
   const submit = () => {
     if(!currentUser){onAuthRequired();return;}
-    const loc=form.locObj?.address||"";
+    // Accept either geocoded address or freetext location
+    const loc = form.locObj?.address || form.locText.trim();
     if(!form.title||!form.date||!loc){alert("Please fill in title, date, and location.");return;}
     if(form.deadline){const d=new Date(form.deadline),ev=new Date(form.date+"T"+(form.time||"00:00")); if(d>=ev){alert("Deadline must be before event start");return;}}
     const ev={...form,id:"e"+Date.now(),joined:[],host:{uid:currentUser.uid,name:currentUser.displayName||currentUser.email?.split("@")[0]||"You"},location:loc,lat:form.locObj?.lat||null,lng:form.locObj?.lng||null,slots:Number(form.slots),deadline:form.deadline||null,participantType:form.type==="tournament"?form.participantType:"players"};
     onCreated(ev); setSaved(true); setTimeout(()=>setSaved(false),2000);
-    setForm({title:"",sport:"basketball",type:"pickup",date:"",time:"",locObj:null,slots:10,description:"",tournamentFormat:"single",participantType:"teams",deadline:""});
+    setChosenSport(isPickup ? null : "basketball");
+    setForm({title:"",sport:"basketball",type:lockedType,date:"",time:"",locObj:null,locText:"",slots:10,description:"",tournamentFormat:"single",participantType:"teams",deadline:"",isPrivate:false});
   };
 
-  const lbl={fontSize:12,fontWeight:700,color:"#555",textTransform:"uppercase",letterSpacing:.5,display:"block",marginBottom:5};
-  const inp={width:"100%",padding:"10px 13px",borderRadius:10,border:"1.5px solid #ddd",fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
+  const lbl={fontSize:12,fontWeight:700,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,display:"block",marginBottom:5};
+  const inp={width:"100%",padding:"10px 13px",borderRadius:10,border:`1.5px solid rgba(255,255,255,.15)`,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit",background:"rgba(255,255,255,.1)",color:"#fff"};
+
+  // Pickup flow: show sport picker first
+  if (isPickup && chosenSport === null) {
+    return <SportPicker mode={mode} onPick={pickSport}/>;
+  }
+
+  const selectedSport = SPORT_MAP[form.sport];
 
   return (
     <div style={{maxWidth:600,margin:"0 auto",padding:"24px 16px"}}>
-      <h1 style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:26,color:"#111",margin:"0 0 20px",letterSpacing:-1}}>Create an event</h1>
-      <div style={{background:"#fff",border:"1.5px solid #eee",borderRadius:18,padding:"24px 22px",display:"flex",flexDirection:"column",gap:16}}>
-        <div>
-          <label style={lbl}>Event type</label>
-          <div style={{display:"flex",gap:10}}>
-            {["pickup","tournament"].map(t=><button key={t} onClick={()=>set("type",t)} style={{flex:1,padding:10,borderRadius:10,border:`2px solid ${form.type===t?"#111":"#ddd"}`,background:form.type===t?"#111":"#fff",color:form.type===t?"#fff":"#555",fontWeight:700,fontSize:14,cursor:"pointer"}}>{t==="pickup"?"🎮 Pickup Game":"🏆 Tournament"}</button>)}
-          </div>
-        </div>
-        {form.type==="tournament"&&<>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:6}}>
+        {isPickup && (
+          <button onClick={()=>setChosenSport(null)} style={{background:"none",border:"none",color:"rgba(255,255,255,.5)",fontSize:22,cursor:"pointer",padding:"0 8px 0 0",lineHeight:1}}>‹</button>
+        )}
+        <h1 style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:26,color:"#fff",margin:0,letterSpacing:-1}}>
+          {mode==="pickup" ? `Create a ${chosenSport==="custom"?"custom":selectedSport?.label||""} pickup` : "Create a tournament"}
+        </h1>
+      </div>
+      <p style={{color:"rgba(255,255,255,.4)",fontSize:14,margin:"0 0 24px 0"}}>{m.tagline}</p>
+      <div style={{background:"rgba(255,255,255,.06)",border:`1.5px solid rgba(255,255,255,.12)`,borderRadius:18,padding:"24px 22px",display:"flex",flexDirection:"column",gap:16}}>
+        {/* Tournament-only fields */}
+        {lockedType==="tournament"&&<>
           <div>
             <label style={lbl}>Format</label>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {FORMATS.map(f=><button key={f.id} onClick={()=>set("tournamentFormat",f.id)} style={{padding:"7px 12px",borderRadius:9,border:`1.5px solid ${form.tournamentFormat===f.id?"#111":"#ddd"}`,background:form.tournamentFormat===f.id?"#111":"#fff",color:form.tournamentFormat===f.id?"#fff":"#666",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+              {FORMATS.map(f=><button key={f.id} onClick={()=>set("tournamentFormat",f.id)} style={{padding:"7px 12px",borderRadius:9,border:`1.5px solid ${form.tournamentFormat===f.id?m.accent:"rgba(255,255,255,.15)"}`,background:form.tournamentFormat===f.id?m.accent:"rgba(255,255,255,.06)",color:form.tournamentFormat===f.id?"#fff":"rgba(255,255,255,.7)",fontSize:13,fontWeight:600,cursor:"pointer"}}>
                 {f.id==="single"?"⚔️":f.id==="double"?"🔁":"🔄"} {f.label}<span style={{display:"block",fontSize:10,fontWeight:400,opacity:.7}}>{f.desc}</span>
               </button>)}
             </div>
@@ -1263,43 +1558,66 @@ function CreatePage({ onCreated, currentUser, onAuthRequired }) {
             <label style={lbl}>Participants are</label>
             <div style={{display:"flex",gap:10}}>
               {[{id:"teams",icon:"🏅",label:"Teams"},{id:"players",icon:"👤",label:"Individual players"}].map(pt=>(
-                <button key={pt.id} onClick={()=>set("participantType",pt.id)} style={{flex:1,padding:"9px 10px",borderRadius:10,border:`2px solid ${form.participantType===pt.id?"#111":"#ddd"}`,background:form.participantType===pt.id?"#111":"#fff",color:form.participantType===pt.id?"#fff":"#555",fontWeight:600,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                <button key={pt.id} onClick={()=>set("participantType",pt.id)} style={{flex:1,padding:"9px 10px",borderRadius:10,border:`2px solid ${form.participantType===pt.id?m.accent:"rgba(255,255,255,.12)"}`,background:form.participantType===pt.id?m.accent:"rgba(255,255,255,.06)",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
                   {pt.icon} {pt.label}
                 </button>
               ))}
             </div>
           </div>
-        </>}
-        <div>
-          <label style={lbl}>Sport</label>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            {SPORTS.map(s=><button key={s.id} onClick={()=>set("sport",s.id)} style={{padding:"7px 13px",borderRadius:9,border:`2px solid ${form.sport===s.id?s.color:"#eee"}`,background:form.sport===s.id?s.bg:"#fff",color:form.sport===s.id?s.color:"#777",fontSize:13,fontWeight:600,cursor:"pointer"}}>{s.emoji} {s.label}</button>)}
+          {/* Sport picker for tournament */}
+          <div>
+            <label style={lbl}>Sport</label>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {SPORTS.map(s=><button key={s.id} onClick={()=>set("sport",s.id)} style={{padding:"7px 13px",borderRadius:9,border:`2px solid ${form.sport===s.id?s.color:"rgba(255,255,255,.12)"}`,background:form.sport===s.id?`${s.color}33`:"rgba(255,255,255,.06)",color:form.sport===s.id?s.color:"rgba(255,255,255,.6)",fontSize:13,fontWeight:600,cursor:"pointer"}}>{s.emoji} {s.label}</button>)}
+            </div>
           </div>
-        </div>
-        <div><label style={lbl}>Title</label><input value={form.title} onChange={e=>set("title",e.target.value)} placeholder="e.g. Saturday Morning Run" style={inp}/></div>
+        </>}
+        {/* Custom sport name for pickup custom events */}
+        {isPickup && chosenSport==="custom" && (
+          <div><label style={lbl}>Sport / Activity name</label><input value={form.title.startsWith("[")?"":(form.sport||"")} onChange={e=>set("sport",e.target.value)} placeholder="e.g. Dodgeball, Ultimate Frisbee…" style={inp}/></div>
+        )}
+        <div><label style={lbl}>Event title</label><input value={form.title} onChange={e=>set("title",e.target.value)} placeholder="e.g. Saturday Morning Run" style={inp}/></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <div><label style={lbl}>Date</label><input type="date" value={form.date} onChange={e=>set("date",e.target.value)} style={inp}/></div>
           <div><label style={lbl}>Time</label><input type="time" value={form.time} onChange={e=>set("time",e.target.value)} style={inp}/></div>
         </div>
         <div>
           <label style={lbl}>Location</label>
-          <LocationSearch value={form.locObj} onChange={v=>set("locObj",v)}/>
+          <LocationSearch
+            value={form.locObj}
+            onChange={v=>{set("locObj",v);set("locText",v.address);}}
+            onTextChange={v=>set("locText",v)}
+          />
           {form.locObj?.lat&&<div style={{marginTop:10}}><MapView lat={form.locObj.lat} lng={form.locObj.lng} label={form.locObj.address}/></div>}
         </div>
-        <div><label style={lbl}>{form.type==="tournament"?(form.participantType==="teams"?"Number of teams":"Number of players"):"Player slots"}</label><input type="number" min={2} max={64} value={form.slots} onChange={e=>set("slots",e.target.value)} style={{...inp,width:120}}/></div>
+        <div><label style={lbl}>{lockedType==="tournament"?(form.participantType==="teams"?"Number of teams":"Number of players"):"Player slots"}</label><input type="number" min={2} max={64} value={form.slots} onChange={e=>set("slots",e.target.value)} style={{...inp,width:120}}/></div>
         <div>
-          <label style={lbl}>Registration deadline <span style={{color:"#bbb",fontWeight:400,fontSize:11,textTransform:"none"}}>(optional)</span></label>
+          <label style={lbl}>Registration deadline <span style={{color:"rgba(255,255,255,.25)",fontWeight:400,fontSize:11,textTransform:"none"}}>(optional)</span></label>
           <input type="datetime-local" value={form.deadline} onChange={e=>set("deadline",e.target.value)} style={inp}/>
-          <div style={{fontSize:11,color:"#aaa",marginTop:4}}>After this time, participants can't join, leave, or edit.</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginTop:4}}>After this time, participants can't join, leave, or edit.</div>
         </div>
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
             <label style={{...lbl,margin:0}}>Description</label>
-            <button onClick={genAI} disabled={aiLoad} style={{fontSize:12,background:"#F8F0FF",color:"#7B2FBE",border:"1px solid #D0A8F5",borderRadius:7,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>{aiLoad?"✨ Generating…":"✨ Write with AI"}</button>
+            <button onClick={genAI} disabled={aiLoad} style={{fontSize:12,background:`${m.accent}22`,color:m.accent,border:`1px solid ${m.accent}44`,borderRadius:7,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>{aiLoad?"✨ Generating…":"✨ Write with AI"}</button>
           </div>
           <textarea value={form.description} onChange={e=>set("description",e.target.value)} placeholder="Describe the event, skill level, what to bring…" rows={3} style={{...inp,resize:"vertical"}}/>
         </div>
-        <button onClick={submit} style={{padding:13,borderRadius:12,border:"none",background:saved?"#2B8A3E":"#111",color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",transition:"background .3s"}}>
+        {/* Privacy toggle */}
+        <div style={{background:"rgba(255,255,255,.05)",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:12}}>Visibility</div>
+          <div style={{display:"flex",gap:10}}>
+            {[{id:false,icon:"🌐",label:"Public",desc:"Visible to everyone browsing"},{id:true,icon:"🔒",label:"Private",desc:"Only accessible via link"}].map(opt=>(
+              <button key={String(opt.id)} onClick={()=>set("isPrivate",opt.id)}
+                style={{flex:1,padding:"10px 12px",borderRadius:10,border:`2px solid ${form.isPrivate===opt.id?m.accent:"rgba(255,255,255,.12)"}`,background:form.isPrivate===opt.id?`${m.accent}22`:"rgba(255,255,255,.05)",color:"#fff",cursor:"pointer",textAlign:"left",transition:"all .15s"}}>
+                <div style={{fontSize:18,marginBottom:4}}>{opt.icon}</div>
+                <div style={{fontSize:13,fontWeight:700}}>{opt.label}</div>
+                <div style={{fontSize:11,color:"rgba(255,255,255,.45)",marginTop:2}}>{opt.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+        <button onClick={submit} style={{padding:13,borderRadius:12,border:"none",background:saved?"#22C55E":m.accent,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",transition:"background .3s",boxShadow:`0 4px 20px ${m.accent}55`}}>
           {saved?"✅ Event created!":currentUser?"Create event →":"Sign in to create →"}
         </button>
       </div>
@@ -1308,29 +1626,33 @@ function CreatePage({ onCreated, currentUser, onAuthRequired }) {
 }
 
 // ─── My Events ────────────────────────────────────────────────────────────────
-function MyEventsPage({ events, currentUser, onOpen }) {
+function MyEventsPage({ events, currentUser, onOpen, mode }) {
+  const m = MODES[mode] || MODES.pickup;
   if(!currentUser) return (
     <div style={{maxWidth:500,margin:"60px auto",textAlign:"center",padding:"0 16px"}}>
       <div style={{fontSize:48,marginBottom:12}}>🔒</div>
-      <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:20,color:"#111",marginBottom:8}}>Sign in to see your events</div>
-      <p style={{color:"#888",fontSize:14}}>Your hosted and joined events will appear here.</p>
+      <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:20,color:"#fff",marginBottom:8}}>Sign in to see your events</div>
+      <p style={{color:"rgba(255,255,255,.4)",fontSize:14}}>Your hosted and joined events will appear here.</p>
     </div>
   );
   const hosted=events.filter(e=>e.host?.uid===currentUser.uid);
   const joined=events.filter(e=>e.joined.some(j=>j.uid===currentUser.uid)&&e.host?.uid!==currentUser.uid);
   const Sec=({title,list})=>(
     <div style={{marginBottom:28}}>
-      <h2 style={{fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:16,color:"#111",margin:"0 0 12px",letterSpacing:-.3}}>{title} <span style={{color:"#aaa",fontWeight:400}}>({list.length})</span></h2>
-      {list.length===0?<div style={{color:"#bbb",fontSize:13,padding:"12px 0"}}>None yet</div>:<div style={{display:"grid",gap:12}}>{list.map(e=><EventCard key={e.id} event={e} onClick={()=>onOpen(e)}/>)}</div>}
+      <h2 style={{fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:16,color:"rgba(255,255,255,.7)",margin:"0 0 12px",letterSpacing:-.3}}>{title} <span style={{color:"rgba(255,255,255,.3)",fontWeight:400}}>({list.length})</span></h2>
+      {list.length===0?<div style={{color:"rgba(255,255,255,.2)",fontSize:13,padding:"12px 0"}}>None yet</div>:<div style={{display:"grid",gap:12}}>{list.map(e=><EventCard key={e.id} event={e} onClick={()=>onOpen(e)} mode={mode}/>)}</div>}
     </div>
   );
   return (
     <div style={{maxWidth:700,margin:"0 auto",padding:"24px 16px"}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:24}}>
-        <div style={{width:40,height:40,borderRadius:"50%",background:"#111",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,color:"#fff",overflow:"hidden",flexShrink:0}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:28}}>
+        <div style={{width:44,height:44,borderRadius:"50%",background:m.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,color:"#fff",overflow:"hidden",flexShrink:0,boxShadow:`0 0 20px ${m.accent}66`}}>
           {currentUser.photo?<img src={currentUser.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:currentUser.displayName?.[0]?.toUpperCase()||"U"}
         </div>
-        <div><div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:20,color:"#111",letterSpacing:-.5}}>{currentUser.displayName}</div><div style={{fontSize:12,color:"#aaa"}}>{currentUser.email}</div></div>
+        <div>
+          <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:20,color:"#fff",letterSpacing:-.5}}>{currentUser.displayName}</div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,.35)"}}>{currentUser.email}</div>
+        </div>
       </div>
       <Sec title="Events I'm hosting" list={hosted}/>
       <Sec title="Events I've joined" list={joined}/>
@@ -1338,39 +1660,385 @@ function MyEventsPage({ events, currentUser, onOpen }) {
   );
 }
 
+// ─── Mode themes ──────────────────────────────────────────────────────────────
+const MODES = {
+  pickup:     { label:"Pickup",     accent:"#F4530D", accentDark:"#C23D00", accentSoft:"#FFF4EE", icon:"🎮", tagline:"Drop in. Play now." },
+  tournament: { label:"Tournament", accent:"#1560BD", accentDark:"#0A3D7A", accentSoft:"#EEF5FF", icon:"🏆", tagline:"Compete. Win. Repeat." },
+};
+
+// ─── Splash screen ────────────────────────────────────────────────────────────
+function SplashScreen({ onDone }) {
+  const [fading, setFading] = useState(false);
+  useEffect(() => {
+    const t1 = setTimeout(() => setFading(true), 900);
+    const t2 = setTimeout(() => onDone(), 1300);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [onDone]);
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"#0A0A0F",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:9999,opacity:fading?0:1,transition:"opacity .4s ease",userSelect:"none"}}>
+      {/* Radial glow */}
+      <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse 60% 50% at 50% 50%, rgba(244,83,13,.18) 0%, transparent 70%)",pointerEvents:"none"}}/>
+      {/* Logo mark */}
+      <div style={{position:"relative",marginBottom:24}}>
+        <div style={{width:88,height:88,borderRadius:24,background:"linear-gradient(135deg,#F4530D,#C23D00)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:44,boxShadow:"0 0 60px rgba(244,83,13,.5)",animation:"su-pulse 1.2s ease-in-out infinite"}}>⚡</div>
+        <div style={{position:"absolute",inset:-2,borderRadius:26,border:"1.5px solid rgba(244,83,13,.3)",pointerEvents:"none"}}/>
+      </div>
+      {/* Wordmark */}
+      <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:42,color:"#fff",letterSpacing:-2,lineHeight:1}}>Sport<span style={{color:"#F4530D"}}>Up</span></div>
+      <div style={{marginTop:10,fontSize:14,color:"rgba(255,255,255,.4)",fontWeight:500,letterSpacing:2,textTransform:"uppercase"}}>Your game. Your rules.</div>
+      <style>{`@keyframes su-pulse{0%,100%{box-shadow:0 0 40px rgba(244,83,13,.4)}50%{box-shadow:0 0 80px rgba(244,83,13,.7)}}`}</style>
+    </div>
+  );
+}
+
+// ─── Mode selector ────────────────────────────────────────────────────────────
+function ModeSelector({ onSelect }) {
+  const [hovered, setHovered] = useState(null);
+  return (
+    <div style={{position:"fixed",inset:0,background:"#0A0A0F",display:"flex",flexDirection:"column",zIndex:9000}}>
+      {/* Header */}
+      <div style={{padding:"32px 28px 20px",textAlign:"center"}}>
+        <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:28,color:"#fff",letterSpacing:-1}}>Sport<span style={{color:"#F4530D"}}>Up</span></div>
+        <div style={{fontSize:13,color:"rgba(255,255,255,.4)",marginTop:6,fontWeight:500}}>What are you here for?</div>
+      </div>
+
+      {/* Two mode cards */}
+      <div style={{flex:1,display:"flex",gap:0,padding:"0 20px 40px",minHeight:0}}>
+        {Object.entries(MODES).map(([modeId, m]) => {
+          const isPickup = modeId === "pickup";
+          const active = hovered === modeId;
+          return (
+            <div key={modeId}
+              onClick={() => onSelect(modeId)}
+              onMouseEnter={() => setHovered(modeId)}
+              onMouseLeave={() => setHovered(null)}
+              style={{
+                flex:1, borderRadius:20, margin:"0 8px", cursor:"pointer", position:"relative", overflow:"hidden",
+                background: isPickup
+                  ? `linear-gradient(160deg, #1A0800 0%, #2D1000 60%, ${active?"#3D1800":"#251000"} 100%)`
+                  : `linear-gradient(160deg, #00081A 0%, #001030 60%, ${active?"#001840":"#000C25"} 100%)`,
+                border:`1.5px solid ${active ? m.accent : "rgba(255,255,255,.08)"}`,
+                transition:"all .25s ease",
+                transform: active ? "scale(1.02)" : "scale(1)",
+                boxShadow: active ? `0 20px 60px ${m.accent}44` : "0 4px 20px rgba(0,0,0,.4)",
+              }}>
+              {/* Glow blob */}
+              <div style={{position:"absolute",top:"20%",left:"50%",transform:"translateX(-50%)",width:"70%",height:"50%",background:`radial-gradient(ellipse, ${m.accent}${active?"44":"22"} 0%, transparent 70%)`,pointerEvents:"none",transition:"all .25s"}}/>
+              {/* Content */}
+              <div style={{position:"relative",height:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 16px",textAlign:"center"}}>
+                {/* Illustration */}
+                <div style={{marginBottom:24,filter:`drop-shadow(0 0 24px ${m.accent}88)`,transition:"all .25s",transform:active?"scale(1.08)":"scale(1)"}}>
+                  {isPickup ? (
+                    /* Sign-up sheet / clipboard */
+                    <svg width="72" height="80" viewBox="0 0 72 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="8" y="14" width="56" height="62" rx="5" fill={`${m.accent}33`} stroke={m.accent} strokeWidth="2.5"/>
+                      <rect x="24" y="6" width="24" height="14" rx="4" fill={m.accent} opacity="0.9"/>
+                      <rect x="18" y="32" width="36" height="3" rx="1.5" fill={m.accent} opacity="0.7"/>
+                      <rect x="18" y="42" width="28" height="3" rx="1.5" fill={m.accent} opacity="0.5"/>
+                      <rect x="18" y="52" width="32" height="3" rx="1.5" fill={m.accent} opacity="0.5"/>
+                      <rect x="18" y="62" width="20" height="3" rx="1.5" fill={m.accent} opacity="0.35"/>
+                      <circle cx="14" cy="33.5" r="2.5" fill={m.accent} opacity="0.8"/>
+                      <circle cx="14" cy="43.5" r="2.5" fill={m.accent} opacity="0.6"/>
+                      <circle cx="14" cy="53.5" r="2.5" fill={m.accent} opacity="0.6"/>
+                      <circle cx="14" cy="63.5" r="2.5" fill={m.accent} opacity="0.4"/>
+                    </svg>
+                  ) : (
+                    /* Tournament bracket — 4 seeds, symmetric top/bottom */
+                    <svg width="80" height="72" viewBox="0 0 80 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      {/* ── R1 Top pair ── */}
+                      <rect x="2" y="4"  width="22" height="10" rx="3" fill={`${m.accent}44`} stroke={m.accent} strokeWidth="1.8"/>
+                      <rect x="2" y="22" width="22" height="10" rx="3" fill={`${m.accent}44`} stroke={m.accent} strokeWidth="1.8"/>
+                      {/* connector: horizontal from each slot, vertical joining them, line to semifinal */}
+                      <line x1="24" y1="9"  x2="32" y2="9"  stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
+                      <line x1="24" y1="27" x2="32" y2="27" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
+                      <line x1="32" y1="9"  x2="32" y2="27" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
+                      <line x1="32" y1="18" x2="40" y2="18" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
+
+                      {/* ── R1 Bottom pair (mirror of top, shifted down) ── */}
+                      <rect x="2" y="38" width="22" height="10" rx="3" fill={`${m.accent}44`} stroke={m.accent} strokeWidth="1.8"/>
+                      <rect x="2" y="56" width="22" height="10" rx="3" fill={`${m.accent}44`} stroke={m.accent} strokeWidth="1.8"/>
+                      <line x1="24" y1="43" x2="32" y2="43" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
+                      <line x1="24" y1="61" x2="32" y2="61" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
+                      <line x1="32" y1="43" x2="32" y2="61" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
+                      <line x1="32" y1="52" x2="40" y2="52" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
+
+                      {/* ── Semifinal: vertical joining top and bottom winners ── */}
+                      <line x1="40" y1="18" x2="40" y2="52" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
+                      <line x1="40" y1="35" x2="50" y2="35" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
+
+                      {/* ── Final / trophy box ── */}
+                      <rect x="50" y="26" width="26" height="18" rx="4" fill={m.accent} opacity="0.9"/>
+                      <text x="63" y="39" textAnchor="middle" fontSize="13" fill="#fff">🏆</text>
+                    </svg>
+                  )}
+                </div>
+                <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:26,color:"#fff",letterSpacing:-1,marginBottom:8}}>{m.label}</div>
+                <div style={{fontSize:13,color:`${m.accent}`,fontWeight:600,letterSpacing:.5,marginBottom:28}}>{m.tagline}</div>
+                {/* CTA */}
+                <div style={{background:m.accent,color:"#fff",fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:14,padding:"12px 28px",borderRadius:99,boxShadow:`0 4px 20px ${m.accent}66`,transition:"all .25s",transform:active?"scale(1.05)":"scale(1)"}}>
+                  {isPickup ? "Find an event" : "Enter a tournament"} →
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Rename user modal ────────────────────────────────────────────────────────
+// ─── Haversine distance (miles) ───────────────────────────────────────────────
+function distanceMiles(lat1, lng1, lat2, lng2) {
+  const R = 3958.8, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ─── User Profile Panel ───────────────────────────────────────────────────────
+function UserProfilePanel({ user, prefs, onSave, onClose }) {
+  const [name, setName] = useState(() => user?.displayName || "");
+  const [radius, setRadius] = useState(() => prefs?.radius || 25);
+  const [locLabel, setLocLabel] = useState(() => prefs?.locLabel || "");
+  const [locCoords, setLocCoords] = useState(() => prefs?.locCoords || null);
+  const [locLoading, setLocLoading] = useState(false);
+  const [locResults, setLocResults] = useState([]);
+  const locTimer = useRef(null);
+
+  const searchLoc = async (q) => {
+    if (q.length < 3) { setLocResults([]); return; }
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&countrycodes=us`);
+      setLocResults(await r.json());
+    } catch { setLocResults([]); }
+  };
+
+  const onLocType = (v) => {
+    setLocLabel(v); setLocCoords(null);
+    clearTimeout(locTimer.current);
+    locTimer.current = setTimeout(() => searchLoc(v), 400);
+  };
+
+  const pickLoc = (r) => {
+    const label = r.display_name.split(",").slice(0,3).join(", ");
+    setLocLabel(label); setLocCoords({ lat: parseFloat(r.lat), lng: parseFloat(r.lon) });
+    setLocResults([]);
+  };
+
+  const useCurrentLoc = () => {
+    if (!navigator.geolocation) { alert("Geolocation not supported by your browser."); return; }
+    setLocLoading(true);
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+        const d = await r.json();
+        const label = d.address ? `${d.address.city||d.address.town||d.address.village||""}, ${d.address.state||""}`.trim().replace(/^,\s*/, "") : "Current location";
+        setLocLabel(label); setLocCoords({ lat, lng });
+      } catch { setLocLabel("Current location"); setLocCoords({ lat, lng }); }
+      setLocLoading(false);
+    }, () => { alert("Could not get your location. Please allow location access or search manually."); setLocLoading(false); });
+  };
+
+  const save = () => {
+    if (!name.trim()) { alert("Name can't be empty"); return; }
+    onSave({ name: name.trim(), radius, locLabel, locCoords });
+    onClose();
+  };
+
+  const inp = { width:"100%", padding:"10px 14px", borderRadius:10, border:"1.5px solid rgba(255,255,255,.2)", background:"rgba(255,255,255,.1)", color:"#fff", fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" };
+  const lbl = { fontSize:11, fontWeight:700, color:"rgba(255,255,255,.45)", textTransform:"uppercase", letterSpacing:.6, display:"block", marginBottom:8 };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"flex-end"}} onClick={onClose}>
+      {/* Slide-in panel from right */}
+      <div style={{background:"#12121C",borderLeft:"1px solid rgba(255,255,255,.1)",width:340,maxWidth:"92vw",height:"100%",overflowY:"auto",padding:"28px 22px",display:"flex",flexDirection:"column",gap:24}} onClick={e=>e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:20,color:"#fff",letterSpacing:-.5}}>My Profile</div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,.4)",fontSize:22,cursor:"pointer",padding:0,lineHeight:1}}>✕</button>
+        </div>
+
+        {/* Display name */}
+        <div>
+          <label style={lbl}>Display name</label>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Your public name" style={inp}/>
+          <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginTop:6}}>This is what other players and hosts see.</div>
+        </div>
+
+        {/* Location */}
+        <div>
+          <label style={lbl}>Your location</label>
+          <div style={{position:"relative"}}>
+            <input value={locLabel} onChange={e=>onLocType(e.target.value)} placeholder="City, zip, or neighborhood…" style={inp} onBlur={()=>setTimeout(()=>setLocResults([]),200)}/>
+            {locResults.length > 0 && (
+              <div style={{position:"absolute",zIndex:10,top:"100%",left:0,right:0,background:"#1e1e2e",border:"1px solid rgba(255,255,255,.15)",borderRadius:10,marginTop:4,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,.4)"}}>
+                {locResults.map((r,i) => (
+                  <div key={i} onMouseDown={()=>pickLoc(r)}
+                    style={{padding:"10px 14px",cursor:"pointer",fontSize:13,color:"rgba(255,255,255,.8)",borderBottom:i<locResults.length-1?"1px solid rgba(255,255,255,.07)":"none"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.08)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                    📍 {r.display_name.split(",").slice(0,3).join(", ")}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={useCurrentLoc} disabled={locLoading}
+            style={{marginTop:10,width:"100%",padding:"10px",borderRadius:10,border:"1.5px solid rgba(255,255,255,.15)",background:"rgba(255,255,255,.06)",color:locLoading?"rgba(255,255,255,.3)":"rgba(255,255,255,.7)",fontSize:13,fontWeight:600,cursor:locLoading?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            {locLoading ? "📍 Getting location…" : "📍 Use my current location"}
+          </button>
+          {locCoords && <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginTop:6}}>✓ Location set: {locLabel}</div>}
+        </div>
+
+        {/* Distance slider */}
+        <div>
+          <label style={lbl}>Search radius</label>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <span style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Within</span>
+            <span style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:22,color:"#fff"}}>{radius} <span style={{fontSize:14,fontWeight:400,color:"rgba(255,255,255,.5)"}}>miles</span></span>
+          </div>
+          <input type="range" min={5} max={100} step={5} value={radius} onChange={e=>setRadius(Number(e.target.value))}
+            style={{width:"100%",accentColor:"#F4530D",cursor:"pointer"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"rgba(255,255,255,.25)",marginTop:4}}>
+            <span>5 mi</span><span>100 mi</span>
+          </div>
+          {!locCoords && <div style={{fontSize:11,color:"rgba(255,255,255,.25)",marginTop:8}}>Set a location above to filter events by distance.</div>}
+        </div>
+
+        {/* Save */}
+        <button onClick={save} style={{padding:"13px",borderRadius:12,border:"none",background:"#F4530D",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",boxShadow:"0 4px 20px rgba(244,83,13,.4)"}}>Save preferences</button>
+
+        {/* Sign out at bottom */}
+        <div style={{borderTop:"1px solid rgba(255,255,255,.08)",paddingTop:20,marginTop:"auto"}}>
+          <div style={{fontSize:12,color:"rgba(255,255,255,.3)",marginBottom:8}}>{user?.email}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Mode-aware NavBar ────────────────────────────────────────────────────────
+// Outline SVG tab icons — thin stroke, matches DM Sans weight
+const TabIcon = ({ id, size=16 }) => {
+  const s = { fill:"none", stroke:"currentColor", strokeWidth:1.6, strokeLinecap:"round", strokeLinejoin:"round" };
+  if (id === "home") return (
+    <svg width={size} height={size} viewBox="0 0 20 20" style={s}>
+      <circle cx="8.5" cy="8.5" r="5"/>
+      <line x1="12.5" y1="12.5" x2="17" y2="17" strokeWidth={1.9} strokeLinecap="round"/>
+    </svg>
+  );
+  if (id === "create") return (
+    <svg width={size} height={size} viewBox="0 0 20 20" style={s}>
+      <line x1="10" y1="3" x2="10" y2="17" strokeWidth={1.9} strokeLinecap="round"/>
+      <line x1="3" y1="10" x2="17" y2="10" strokeWidth={1.9} strokeLinecap="round"/>
+    </svg>
+  );
+  if (id === "my") return (
+    <svg width={size} height={size} viewBox="0 0 20 20" style={s}>
+      <rect x="3" y="4" width="14" height="13" rx="2"/>
+      <line x1="7" y1="2" x2="7" y2="6"/>
+      <line x1="13" y1="2" x2="13" y2="6"/>
+      <line x1="3" y1="9" x2="17" y2="9"/>
+      <line x1="7" y1="13" x2="7" y2="13" strokeWidth={2.2} strokeLinecap="round"/>
+      <line x1="10" y1="13" x2="10" y2="13" strokeWidth={2.2} strokeLinecap="round"/>
+      <line x1="13" y1="13" x2="13" y2="13" strokeWidth={2.2} strokeLinecap="round"/>
+    </svg>
+  );
+  return null;
+};
+
+function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile, prefs, mode, onBackToModes }) {
+  const m = MODES[mode] || MODES.pickup;
+  const [showProfile, setShowProfile] = useState(false);
+  const tabs = [{id:"home",label:"Browse"},{id:"create",label:"Create"},{id:"my",label:"My Events"}];
+  return (
+    <>
+      {showProfile && <UserProfilePanel user={user} prefs={prefs} onSave={onUpdateProfile} onClose={()=>setShowProfile(false)}/>}
+      <nav style={{position:"sticky",top:0,zIndex:100,background:"rgba(10,10,15,.96)",backdropFilter:"blur(12px)",borderBottom:`1px solid ${m.accent}33`,display:"flex",alignItems:"center",padding:"0 16px",height:56,gap:8}}>
+        <button onClick={onBackToModes} title="Switch mode" style={{background:"none",border:"none",color:"rgba(255,255,255,.5)",fontSize:22,cursor:"pointer",padding:"0 8px 0 0",lineHeight:1,display:"flex",alignItems:"center",flexShrink:0,transition:"color .15s"}}
+          onMouseEnter={e=>e.currentTarget.style.color="#fff"} onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,.5)"}>‹</button>
+        <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:18,color:"#fff",marginRight:"auto",letterSpacing:-.5,whiteSpace:"nowrap"}}>
+          Sport<span style={{color:m.accent}}>Up</span>
+          <span style={{marginLeft:8,fontSize:11,fontWeight:600,color:m.accent,background:`${m.accent}22`,borderRadius:99,padding:"2px 8px",letterSpacing:.5,textTransform:"uppercase"}}>{m.label}</span>
+        </div>
+        <div style={{display:"flex",gap:3}}>
+          {tabs.map(t=>(
+            <button key={t.id} onClick={()=>setPage(t.id)} style={{background:page===t.id?m.accent:"transparent",color:page===t.id?"#fff":"rgba(255,255,255,.55)",border:"none",borderRadius:8,padding:"6px 12px",fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"all .15s"}}>
+              <span style={{color: (t.id==="home" || t.id==="create") && page!==t.id ? m.accent : "inherit", display:"flex", alignItems:"center"}}>
+                <TabIcon id={t.id} size={15}/>
+              </span>
+              <span style={{display:"inline",fontFamily:"'DM Sans',sans-serif"}}>{t.label}</span>
+              {t.id==="my"&&count>0&&<span style={{background:"#fff",color:m.accent,borderRadius:99,fontSize:10,padding:"1px 5px",fontWeight:800}}>{count}</span>}
+            </button>
+          ))}
+        </div>
+        {user
+          ? <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:4}}>
+              <button onClick={()=>setShowProfile(true)} title="Profile & preferences"
+                style={{width:30,height:30,borderRadius:"50%",background:m.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#fff",flexShrink:0,overflow:"hidden",border:"none",cursor:"pointer",padding:0,transition:"opacity .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.opacity=".75"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+                {user.photo?<img src={user.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:(user.displayName?.[0]||"U").toUpperCase()}
+              </button>
+              <button onClick={onSignOut} style={{fontSize:12,color:"rgba(255,255,255,.4)",background:"none",border:"none",cursor:"pointer",padding:0}}>Sign out</button>
+            </div>
+          : <button onClick={onAuth} style={{padding:"6px 14px",borderRadius:8,border:`1.5px solid ${m.accent}`,background:m.accent,color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Sign in</button>}
+      </nav>
+    </>
+  );
+}
+
 // ─── App root ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [events, setEvents] = useState(() => load("su_events_v3", SAMPLE_EVENTS));
+  const [appState, setAppState] = useState("splash"); // splash | mode | app
+  const [mode, setMode] = useState(() => load("su_mode", null)); // pickup | tournament | null
+  const [events, setEvents] = useState(() => {
+    // Clear old corrupted data where SAMPLE_HOST_UID was replaced with real user uids.
+    // We detect this by checking if any sample event host uid matches a stored user uid.
+    const storedUser = load("su_user", null);
+    const storedEvents = load("su_events_v3", null);
+    if (storedEvents && storedUser?.uid) {
+      const sampleIds = ["e1","e2","e3","e4","e5"];
+      const corrupted = storedEvents.some(e =>
+        sampleIds.includes(e.id) && e.host?.uid === storedUser.uid
+      );
+      if (corrupted) {
+        // Wipe the stale event store — user's own created events are lost but
+        // sample data will reload clean without host contamination
+        localStorage.removeItem("su_events_v3");
+        return SAMPLE_EVENTS;
+      }
+    }
+    return storedEvents || SAMPLE_EVENTS;
+  });
   const [page, setPage] = useState("home");
   const [selected, setSelected] = useState(null);
   const [user, setUser] = useState(() => load("su_user", null));
+  const [prefs, setPrefs] = useState(() => load("su_prefs", { radius: 25, locLabel: "", locCoords: null }));
   const [showAuth, setShowAuth] = useState(false);
 
   const evRef = useRef(events);
   useEffect(() => { evRef.current = events; }, [events]);
 
-  // Substitute HOST_DEMO with real uid — once per uid change
-  const prevUid = useRef(null);
-  useEffect(() => {
-    const uid = user?.uid;
-    if (uid && uid !== prevUid.current) {
-      prevUid.current = uid;
-      setEvents(ev => ev.map(e => e.host?.uid===SAMPLE_HOST_UID ? {...e,host:{...e.host,uid}} : e));
-    }
-  }, [user?.uid]);
+  // After splash, go to mode selector if no mode saved, else straight to app
+  const onSplashDone = useCallback(() => {
+    if (mode) setAppState("app");
+    else setAppState("mode");
+  }, [mode]);
+
+  const onSelectMode = (m) => { setMode(m); save("su_mode", m); setAppState("app"); setPage("home"); setSelected(null); };
+  const onBackToModes = () => { setAppState("mode"); setSelected(null); setPage("home"); };
 
   useEffect(() => { save("su_events_v3", events); }, [events]);
   useEffect(() => { save("su_user", user); }, [user]);
-
-  // Load fonts
   useEffect(() => {
     const l=document.createElement("link"); l.href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap"; l.rel="stylesheet"; document.head.appendChild(l);
   }, []);
 
-  // Hash deep-link — stable, uses ref for events
   const openFromHash = useCallback((hash) => {
-    const m=hash.match(/[#&]event=([^&]+)/);
-    if(m){const id=decodeURIComponent(m[1]),ev=evRef.current.find(e=>e.id===id); if(ev){setSelected(ev);setPage("home");}}
+    const m2=hash.match(/[#&]event=([^&]+)/);
+    if(m2){const id=decodeURIComponent(m2[1]),ev=evRef.current.find(e=>e.id===id); if(ev){setSelected(ev);setPage("home");setAppState("app");}}
   }, []);
   useEffect(() => {
     openFromHash(window.location.hash);
@@ -1384,35 +2052,51 @@ export default function App() {
     setSelected(prev => prev?.id===id ? fn(prev) : prev);
   }, []);
 
-  const onJoin      = useCallback((id,p)    => patch(id, e=>({...e,joined:[...e.joined,p]})), [patch]);
-  const onLeave     = useCallback((id,uid)  => patch(id, e=>({...e,joined:e.joined.filter(j=>j.uid!==uid)})), [patch]);
-  const onUpdSlots  = useCallback((id,n)    => patch(id, e=>({...e,slots:n})), [patch]);
-  const onUpdDL     = useCallback((id,dl)   => patch(id, e=>({...e,deadline:dl})), [patch]);
-  const onUpdPlayers= useCallback((id,tuid,players,name) => patch(id, e=>({...e,joined:e.joined.map(j=>j.uid===tuid?{...j,players,...(name?{name}:{})}:j)})), [patch]);
-  const onCancel    = useCallback((id)       => { setEvents(ev => ev.filter(e => e.id !== id)); setSelected(null); }, []);
-  const onCreated   = useCallback((ev)      => { setEvents(ev2=>[ev,...ev2]); setPage("my"); }, []);
-  const onSignOut   = ()=>{ setUser(null); save("su_user",null); };
+  const onJoin       = useCallback((id,p)           => patch(id, e=>({...e,joined:[...e.joined,p]})), [patch]);
+  const onLeave      = useCallback((id,uid2)         => patch(id, e=>({...e,joined:e.joined.filter(j=>j.uid!==uid2)})), [patch]);
+  const onUpdSlots   = useCallback((id,n)            => patch(id, e=>({...e,slots:n})), [patch]);
+  const onUpdDL      = useCallback((id,dl)           => patch(id, e=>({...e,deadline:dl})), [patch]);
+  const onUpdPlayers = useCallback((id,tuid,pl,name) => patch(id, e=>({...e,joined:e.joined.map(j=>j.uid===tuid?{...j,players:pl,...(name?{name}:{})}:j)})), [patch]);
+  const onUpdEvent   = useCallback((updated)         => patch(updated.id, ()=>updated), [patch]);
+  const onCancel     = useCallback((id)              => { setEvents(ev=>ev.filter(e=>e.id!==id)); setSelected(null); }, []);
+  const onCreated    = useCallback((ev)              => { setEvents(ev2=>[ev,...ev2]); setPage("my"); }, []);
+  const onSignOut       = () => { setUser(null); save("su_user",null); };
+  const onUpdateProfile = ({ name, radius, locLabel, locCoords }) => {
+    setUser(u => { const updated={...u,displayName:name}; save("su_user",updated); return updated; });
+    const p = { radius, locLabel, locCoords }; setPrefs(p); save("su_prefs", p);
+  };
 
-  const openEvent = (ev) => { setSelected(ev); window.location.hash=`event=${ev.id}`; };
-  const closeEvent= () =>  { setSelected(null); window.history.replaceState(null,"",window.location.pathname+window.location.search); };
-  const navPage   = (p) =>  { setSelected(null); window.location.hash=""; setPage(p); };
+  const openEvent  = (ev) => { setSelected(ev); window.location.hash=`event=${ev.id}`; };
+  const closeEvent = ()   => { setSelected(null); window.history.replaceState(null,"",window.location.pathname+window.location.search); };
+  const navPage    = (p)  => { setSelected(null); window.location.hash=""; setPage(p); };
 
-  const myCount = user ? events.filter(e=>e.host?.uid===user.uid||e.joined.some(j=>j.uid===user.uid)).length : 0;
+  // Filter events to current mode
+  const modeEvents = events.filter(e => mode==="pickup" ? e.type==="pickup" : e.type==="tournament");
+  const myCount = user ? modeEvents.filter(e=>e.host?.uid===user.uid||e.joined.some(j=>j.uid===user.uid)).length : 0;
+
+  const m = MODES[mode] || MODES.pickup;
+
+  // Global dark bg for app mode
+  const appBg = mode==="tournament" ? "#06090F" : "#0D0600";
+  const pageBg = mode==="tournament" ? "#0F1420" : "#180A00";
+
+  if (appState==="splash") return <SplashScreen onDone={onSplashDone}/>;
+  if (appState==="mode")   return <ModeSelector onSelect={onSelectMode}/>;
 
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif",minHeight:"100vh",background:"#F7F7F5"}}>
-      <NavBar page={page} setPage={navPage} count={myCount} user={user} onAuth={()=>setShowAuth(true)} onSignOut={onSignOut}/>
+    <div style={{fontFamily:"'DM Sans',sans-serif",minHeight:"100vh",background:pageBg}}>
+      <NavBar page={page} setPage={navPage} count={myCount} user={user} onAuth={()=>setShowAuth(true)} onSignOut={onSignOut} onUpdateProfile={onUpdateProfile} prefs={prefs} mode={mode} onBackToModes={onBackToModes}/>
       {showAuth&&<AuthModal onClose={()=>setShowAuth(false)} onSignIn={u=>{setUser(u);setShowAuth(false);}}/>}
       {selected
         ? <EventDetail
             event={events.find(e=>e.id===selected.id)||selected}
-            currentUser={user}
+            currentUser={user} mode={mode}
             onJoin={onJoin} onLeave={onLeave} onCancel={onCancel}
-            onUpdateSlots={onUpdSlots} onUpdateDeadline={onUpdDL} onUpdatePlayers={onUpdPlayers}
+            onUpdateSlots={onUpdSlots} onUpdateDeadline={onUpdDL} onUpdatePlayers={onUpdPlayers} onUpdateEvent={onUpdEvent}
             onBack={closeEvent} onAuthRequired={()=>setShowAuth(true)}/>
-        : page==="home"   ? <HomePage  events={events} onOpen={openEvent} setPage={setPage}/>
-        : page==="create" ? <CreatePage onCreated={onCreated} currentUser={user} onAuthRequired={()=>setShowAuth(true)}/>
-        :                   <MyEventsPage events={events} currentUser={user} onOpen={openEvent}/>}
+        : page==="home"   ? <HomePage   events={modeEvents} onOpen={openEvent} setPage={setPage} mode={mode} currentUser={user} prefs={prefs}/>
+        : page==="create" ? <CreatePage onCreated={onCreated} currentUser={user} onAuthRequired={()=>setShowAuth(true)} mode={mode}/>
+        :                   <MyEventsPage events={modeEvents} currentUser={user} onOpen={openEvent} mode={mode}/>}
     </div>
   );
 }
