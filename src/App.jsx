@@ -789,6 +789,9 @@ function AuthModal({ onClose, onSignIn }) {
         <div style={{display:"flex",gap:0,marginBottom:14,border:"1.5px solid #eee",borderRadius:10,overflow:"hidden"}}>
           {["signin","signup"].map(m=><button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:8,border:"none",background:mode===m?"#111":"#fff",color:mode===m?"#fff":"#888",fontSize:13,fontWeight:600,cursor:"pointer"}}>{m==="signin"?"Sign in":"Sign up"}</button>)}
         </div>
+        <p style={{fontSize:11,color:"rgba(255,255,255,.25)",margin:"0 0 14px",textAlign:"center"}}>
+          By signing in you agree to our <a href="/privacy" target="_blank" style={{color:"rgba(255,255,255,.4)",textDecoration:"underline"}}>Privacy Policy</a>.
+        </p>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {mode==="signup"&&<input value={name} onChange={e=>setName(e.target.value)} placeholder="Display name" style={inp}/>}
           <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" style={inp}/>
@@ -1772,7 +1775,7 @@ function SplashScreen({ onDone }) {
       </div>
       {/* Wordmark */}
       <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:42,color:"#fff",letterSpacing:-2,lineHeight:1}}>Sport<span style={{color:"#F4530D"}}>Up</span></div>
-      <div style={{marginTop:10,fontSize:14,color:"rgba(255,255,255,.4)",fontWeight:500,letterSpacing:2,textTransform:"uppercase"}}>Your game. Your rules.</div>
+      <div style={{marginTop:10,fontSize:14,color:"rgba(255,255,255,.4)",fontWeight:500,letterSpacing:2,textTransform:"uppercase"}}>Squad Up. Show Up.</div>
       <style dangerouslySetInnerHTML={{__html:"@keyframes su-pulse{0%,100%{box-shadow:0 0 40px rgba(244,83,13,.4)}50%{box-shadow:0 0 80px rgba(244,83,13,.7)}}"}} />
     </div>
   );
@@ -1872,6 +1875,9 @@ function ModeSelector({ onSelect }) {
         })}
         </div>
       </div>
+      <div style={{textAlign:"center",padding:"0 0 20px"}}>
+        <a href="/privacy" target="_blank" style={{fontSize:11,color:"rgba(255,255,255,.2)",textDecoration:"underline",fontFamily:"'DM Sans',sans-serif"}}>Privacy Policy</a>
+      </div>
     </div>
   );
 }
@@ -1884,7 +1890,7 @@ function distanceMiles(lat1, lng1, lat2, lng2) {
 }
 
 //
-function UserProfilePanel({ user, prefs, onSave, onClose }) {
+function UserProfilePanel({ user, prefs, onSave, onClose, onSignOut }) {
   const [name, setName] = useState(() => user?.displayName || "");
   const [radius, setRadius] = useState(() => prefs?.radius || 25);
   const [locLabel, setLocLabel] = useState(() => prefs?.locLabel || "");
@@ -1999,7 +2005,9 @@ function UserProfilePanel({ user, prefs, onSave, onClose }) {
 
         {/* Sign out at bottom */}
         <div style={{borderTop:"1px solid rgba(255,255,255,.08)",paddingTop:20,marginTop:"auto"}}>
-          <div style={{fontSize:12,color:"rgba(255,255,255,.3)",marginBottom:8}}>{user?.email}</div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,.3)",marginBottom:12}}>{user?.email}</div>
+          <button onClick={()=>{onClose();onSignOut();}} style={{width:"100%",padding:"10px",borderRadius:10,border:"1.5px solid rgba(255,255,255,.12)",background:"transparent",color:"rgba(255,255,255,.6)",fontWeight:600,fontSize:14,cursor:"pointer",marginBottom:12}}>Sign out</button>
+          <a href="/privacy" target="_blank" style={{fontSize:11,color:"rgba(255,255,255,.25)",textDecoration:"underline"}}>Privacy Policy</a>
         </div>
       </div>
     </div>
@@ -2042,7 +2050,7 @@ function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile
   const tabs = [{id:"home",label:"Browse"},{id:"create",label:"Create"},{id:"my",label:"My Events"}];
   return (
     <>
-      {showProfile && <UserProfilePanel user={user} prefs={prefs} onSave={onUpdateProfile} onClose={()=>setShowProfile(false)}/>}
+      {showProfile && <UserProfilePanel user={user} prefs={prefs} onSave={onUpdateProfile} onClose={()=>setShowProfile(false)} onSignOut={onSignOut}/>}
       <nav style={{position:"sticky",top:0,zIndex:100,background:"rgba(10,10,15,.96)",backdropFilter:"blur(12px)",borderBottom:("1px solid "+m.accent+"33"),display:"flex",alignItems:"center",padding:"0 10px",height:56,gap:4}}>
         <button onClick={onBackToModes} title="Switch mode" style={{background:"none",border:"none",color:"rgba(255,255,255,.5)",fontSize:28,cursor:"pointer",padding:"0 4px 0 0",lineHeight:1,display:"flex",alignItems:"center",flexShrink:0}}>‹</button>
         <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:22,color:"#fff",marginRight:"auto",letterSpacing:-.5,whiteSpace:"nowrap",flexShrink:0}}>
