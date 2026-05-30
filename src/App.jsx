@@ -1980,17 +1980,17 @@ function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile
   return (
     <>
       {showProfile && <UserProfilePanel user={user} prefs={prefs} onSave={onUpdateProfile} onClose={()=>setShowProfile(false)}/>}
-      <nav style={{position:"sticky",top:0,zIndex:100,background:"rgba(10,10,15,.96)",backdropFilter:"blur(12px)",borderBottom:("1px solid "+m.accent+"33"),display:"flex",alignItems:"center",padding:"0 8px",height:52,gap:2}}>
-        <button onClick={onBackToModes} title="Switch mode" style={{background:"none",border:"none",color:"rgba(255,255,255,.5)",fontSize:22,cursor:"pointer",padding:"0 2px 0 0",lineHeight:1,display:"flex",alignItems:"center",flexShrink:0}}>‹</button>
-        <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:15,color:"#fff",marginRight:"auto",letterSpacing:-.5,whiteSpace:"nowrap",flexShrink:0}}>
+      <nav style={{position:"sticky",top:0,zIndex:100,background:"rgba(10,10,15,.96)",backdropFilter:"blur(12px)",borderBottom:("1px solid "+m.accent+"33"),display:"flex",alignItems:"center",padding:"0 10px",height:56,gap:4}}>
+        <button onClick={onBackToModes} title="Switch mode" style={{background:"none",border:"none",color:"rgba(255,255,255,.5)",fontSize:28,cursor:"pointer",padding:"0 4px 0 0",lineHeight:1,display:"flex",alignItems:"center",flexShrink:0}}>‹</button>
+        <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:22,color:"#fff",marginRight:"auto",letterSpacing:-.5,whiteSpace:"nowrap",flexShrink:0}}>
           Sport<span style={{color:m.accent}}>Up</span>
-          <span style={{marginLeft:4,fontSize:9,fontWeight:600,color:m.accent,background:(m.accent+"22"),borderRadius:99,padding:"1px 5px",letterSpacing:.3,textTransform:"uppercase"}}>{m.label}</span>
+          <span style={{marginLeft:5,fontSize:10,fontWeight:600,color:m.accent,background:(m.accent+"22"),borderRadius:99,padding:"1px 6px",letterSpacing:.3,textTransform:"uppercase"}}>{m.label}</span>
         </div>
-        <div style={{display:"flex",gap:0,flexShrink:0}}>
+        <div style={{display:"flex",gap:2,flexShrink:0}}>
           {tabs.map(t=>(
-            <button key={t.id} onClick={()=>setPage(t.id)} style={{background:page===t.id?m.accent:"transparent",color:page===t.id?"#fff":"rgba(255,255,255,.55)",border:"none",borderRadius:8,padding:"6px 7px",fontSize:10,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:3,transition:"all .15s",flexShrink:0}}>
+            <button key={t.id} onClick={()=>setPage(t.id)} style={{background:page===t.id?m.accent:"transparent",color:page===t.id?"#fff":"rgba(255,255,255,.55)",border:"none",borderRadius:8,padding:"7px 9px",fontSize:10,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:3,transition:"all .15s",flexShrink:0}}>
               <span style={{color:page!==t.id?m.accent:"inherit",display:"flex",alignItems:"center",flexShrink:0}}>
-                <TabIcon id={t.id} size={16}/>
+                <TabIcon id={t.id} size={20}/>
               </span>
               <span className="nav-label" style={{fontFamily:"'DM Sans',sans-serif"}}>{t.label}</span>
               {t.id==="my"&&count>0&&<span style={{background:"#fff",color:m.accent,borderRadius:99,fontSize:9,padding:"1px 4px",fontWeight:800,flexShrink:0}}>{count}</span>}
@@ -2000,11 +2000,11 @@ function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile
         {user
           ? <div style={{display:"flex",alignItems:"center",marginLeft:4,flexShrink:0}}>
               <button onClick={()=>setShowProfile(true)} title="Profile & preferences"
-                style={{width:28,height:28,borderRadius:"50%",background:m.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0,overflow:"hidden",border:"none",cursor:"pointer",padding:0}}>
+                style={{width:30,height:30,borderRadius:"50%",background:m.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#fff",flexShrink:0,overflow:"hidden",border:"none",cursor:"pointer",padding:0}}>
                 {user.photo?<img src={user.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:(user.displayName?.[0]||"U").toUpperCase()}
               </button>
             </div>
-          : <button onClick={onAuth} style={{padding:"5px 9px",borderRadius:8,border:("1.5px solid "+m.accent),background:m.accent,color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,marginLeft:3}}>Sign in</button>}
+          : <button onClick={onAuth} style={{padding:"6px 11px",borderRadius:8,border:("1.5px solid "+m.accent),background:m.accent,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,marginLeft:4}}>Sign in</button>}
       </nav>
     </>
   );
