@@ -1231,6 +1231,9 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
               {event.description&&<div><div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>About</div><p style={{fontSize:14,color:"#444",lineHeight:1.65,margin:0}}>{event.description}</p></div>}
               {event.lat&&<div><div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Location</div><MapView lat={event.lat} lng={event.lng} label={event.location}/></div>}
 
+              {/* Join button — above share link */}
+              {spotsLeft>0&&!isIn&&!isHost&&!pastDL&&<button onClick={()=>{if(!currentUser){onAuthRequired();return;}setShowJoin(true);}} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:s.color,color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",boxShadow:`0 4px 20px ${s.color}55`}}>{event.type==="tournament"?`Register ${ptSingular} →`:"Join game →"}</button>}
+
               {/* Share + Privacy */}
               <div style={{background:"#F7F7F5",border:"1.5px solid #eee",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
                 {/* Privacy toggle -- host only */}
@@ -1322,7 +1325,6 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
 
                 {isHost&&spotsLeft===0&&<div style={{fontSize:12,color:"#aaa",textAlign:"center",marginBottom:4}}>Full -- increase capacity above to add more</div>}
 
-                {spotsLeft>0&&!isIn&&!isHost&&!pastDL&&<button onClick={()=>{if(!currentUser){onAuthRequired();return;}setShowJoin(true);}} style={{width:"100%",padding:11,borderRadius:10,border:"none",background:s.color,color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>{event.type==="tournament"?`Register ${ptSingular} →`:"Join game →"}</button>}
                 {spotsLeft>0&&!isIn&&!isHost&&pastDL&&<div style={{textAlign:"center",fontSize:13,color:"#C92A2A",fontWeight:600,padding:10,background:"#FFF5F5",borderRadius:10}}>🔒 Registration closed</div>}
                 {spotsLeft===0&&!isIn&&!isHost&&<div style={{color:"#C92A2A",fontWeight:700,fontSize:13,marginTop:4}}>❌ This event is full</div>}
               </div>
@@ -2068,7 +2070,7 @@ function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile
     <>
       {showProfile && <UserProfilePanel user={user} prefs={prefs} onSave={onUpdateProfile} onClose={()=>setShowProfile(false)} onSignOut={onSignOut}/>}
       <nav style={{position:"sticky",top:0,zIndex:100,background:"rgba(10,10,15,.96)",backdropFilter:"blur(12px)",borderBottom:("1px solid "+m.accent+"33"),display:"flex",alignItems:"center",padding:"0 10px",height:56,gap:4}}>
-        <button onClick={onBackToModes} title="Switch mode" style={{background:"none",border:"none",color:"rgba(255,255,255,.5)",fontSize:28,cursor:"pointer",padding:"0 4px 0 0",lineHeight:1,display:"flex",alignItems:"center",flexShrink:0}}>‹</button>
+        <button onClick={onBackToModes} title="Switch mode" style={{background:"none",border:"none",color:"rgba(255,255,255,.5)",fontSize:44,cursor:"pointer",padding:"0 4px 0 0",lineHeight:1,display:"flex",alignItems:"center",flexShrink:0,position:"relative",top:-2}}>‹</button>
         <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:22,color:"#fff",marginRight:"auto",letterSpacing:-.5,whiteSpace:"nowrap",flexShrink:0}}>
           Sport<span style={{color:m.accent}}>Up</span>
           <span style={{marginLeft:5,fontSize:10,fontWeight:600,color:m.accent,background:(m.accent+"22"),borderRadius:99,padding:"1px 6px",letterSpacing:.3,textTransform:"uppercase"}}>{m.label}</span>
