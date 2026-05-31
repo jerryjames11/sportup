@@ -762,17 +762,18 @@ function AuthModal({ onClose, onSignIn }) {
 
   const gEmail = async () => {
     if(!email||!pw) { setErr("Please fill in all fields"); return; }
+    if(mode==="signup"&&!name.trim()) { setErr("Please enter a display name"); return; }
     setLoading(true); setErr("");
     try {
       const fb = await getFirebase();
       let r;
-      if(mode==="signup") { r=await fb.createUserWithEmailAndPassword(fb.auth,email,pw); await fb.updateProfile(r.user,{displayName:name||email.split("@")[0]}); }
+      if(mode==="signup") { r=await fb.createUserWithEmailAndPassword(fb.auth,email,pw); await fb.updateProfile(r.user,{displayName:name.trim()}); }
       else { r=await fb.signInWithEmailAndPassword(fb.auth,email,pw); }
-      onSignIn({uid:r.user.uid,displayName:r.user.displayName||email.split("@")[0],email:r.user.email,photo:null});
+      onSignIn({uid:r.user.uid,displayName:r.user.displayName||name.trim()||"Player",email:r.user.email,photo:null});
       onClose();
     } catch(e) {
       const uid=stableUid(email||"anon");
-      onSignIn({uid,displayName:name||email.split("@")[0]||"Player",email,photo:null});
+      onSignIn({uid,displayName:name.trim()||"Player",email,photo:null});
       onClose();
     }
     setLoading(false);
@@ -855,7 +856,7 @@ function JoinModal({ event, currentUser, onConfirm, onClose }) {
   const [email, setEmail] = useState(() => currentUser?.email || "");
   const [phone, setPhone] = useState("");
   const confirm = () => {
-    const n = isTmnt ? entryName.trim() : (currentUser?.displayName||"Player");
+    const n = isTmnt ? entryName.trim() : (currentUser?.displayName || "Player");
     if (isTmnt && !n) { alert(`Enter a ${pt==="teams"?"team":"player"} name`); return; }
     if (!phone.trim()) { alert("Phone number is required."); return; }
     onConfirm({ uid:currentUser.uid, name:n, email:email.trim(), phone:phone.trim(), ...(isTmnt&&pt==="teams"?{players:[]}:{}) });
@@ -1610,7 +1611,7 @@ function CreatePage({ onCreated, currentUser, onAuthRequired, mode }) {
     const loc = form.locObj?.address || (form.locText||"").trim();
     if(!form.title||!form.date||!loc){alert("Please fill in title, date, and location.");return;}
     if(form.deadline){const d=new Date(form.deadline),ev=new Date(form.date+"T"+(form.time||"00:00")); if(d>=ev){alert("Deadline must be before event start");return;}}
-    const ev={...form,id:"e"+Date.now(),joined:[],host:{uid:currentUser.uid,name:currentUser.displayName||currentUser.email?.split("@")[0]||"You"},location:loc,lat:form.locObj?.lat||null,lng:form.locObj?.lng||null,slots:Number(form.slots),deadline:form.deadline||null,participantType:form.type==="tournament"?form.participantType:"players"};
+    const ev={...form,id:"e"+Date.now(),joined:[],host:{uid:currentUser.uid,name:currentUser.displayName||"Player"},location:loc,lat:form.locObj?.lat||null,lng:form.locObj?.lng||null,slots:Number(form.slots),deadline:form.deadline||null,participantType:form.type==="tournament"?form.participantType:"players"};
     // Navigate away immediately — Firestore write happens in background
     // Reset form state before navigating
     setChosenSport(isPickup ? null : "basketball");
