@@ -57,6 +57,22 @@ const SPORTS = [
 ];
 const SPORT_MAP = Object.fromEntries(SPORTS.map(s => [s.id, s]));
 
+// Unified lookup covering both sports and wellness activities
+const ALL_SPORT_MAP = {
+  ...SPORT_MAP,
+  walk:    { id:"walk",    label:"Walk",     emoji:"🚶", color:"#2B8A3E", bg:"#F0FBF4" },
+  cardio:  { id:"cardio",  label:"Cardio",   emoji:"🏃", color:"#E8590C", bg:"#FFF4EE" },
+  yoga:    { id:"yoga",    label:"Yoga",     emoji:"🧘", color:"#1560BD", bg:"#EEF5FF" },
+  cycling: { id:"cycling", label:"Cycling",  emoji:"🚴", color:"#856404", bg:"#FFFBEB" },
+  gym:     { id:"gym",     label:"Gym Sesh", emoji:"💪", color:"#7B2FBE", bg:"#F8F0FF" },
+  // also match by label for events created via wellness picker
+  Walk:    { id:"walk",    label:"Walk",     emoji:"🚶", color:"#2B8A3E", bg:"#F0FBF4" },
+  Cardio:  { id:"cardio",  label:"Cardio",   emoji:"🏃", color:"#E8590C", bg:"#FFF4EE" },
+  Yoga:    { id:"yoga",    label:"Yoga",     emoji:"🧘", color:"#1560BD", bg:"#EEF5FF" },
+  Cycling: { id:"cycling", label:"Cycling",  emoji:"🚴", color:"#856404", bg:"#FFFBEB" },
+  "Gym Sesh": { id:"gym", label:"Gym Sesh", emoji:"💪", color:"#7B2FBE", bg:"#F8F0FF" },
+};
+
 const FORMATS = [
   { id: "single", label: "Single Elimination", desc: "Lose once, you're out" },
   { id: "double", label: "Double Elimination", desc: "Two losses to be out" },
@@ -135,11 +151,10 @@ async function getFirebase() {
     messagingSenderId: (window.__FB_MESSAGING_SENDER_ID__|| ""),
     appId:             (window.__FB_APP_ID__             || ""),
   };
-  //
   const [app, auth, fs] = await Promise.all([
-    import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"),
-    import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"),
-    import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"),
+    import("firebase/app"),
+    import("firebase/auth"),
+    import("firebase/firestore"),
   ]);
   const fbApp = app.initializeApp(cfg);
   _fb = { auth: auth.getAuth(fbApp), google: new auth.GoogleAuthProvider(), ...auth, ...fs, db: fs.getFirestore(fbApp) };
@@ -749,7 +764,9 @@ function AuthModal({ onClose, onSignIn }) {
     try {
       const fb = await getFirebase();
       const r = await fb.signInWithPopup(fb.auth, fb.google);
-      onSignIn({uid:r.user.uid,displayName:r.user.displayName,email:r.user.email,photo:r.user.photoURL});
+      const savedUser = load("su_user", null);
+      const preferredName = savedUser?.uid === r.user.uid ? savedUser.displayName : null;
+      onSignIn({uid:r.user.uid, displayName:preferredName||r.user.displayName, email:r.user.email, photo:r.user.photoURL});
       onClose();
     } catch(e) {
       if(e.code==="auth/popup-blocked") { setErr("Popup blocked -- please allow popups and try again."); }
@@ -769,7 +786,9 @@ function AuthModal({ onClose, onSignIn }) {
       let r;
       if(mode==="signup") { r=await fb.createUserWithEmailAndPassword(fb.auth,email,pw); await fb.updateProfile(r.user,{displayName:name.trim()}); }
       else { r=await fb.signInWithEmailAndPassword(fb.auth,email,pw); }
-      onSignIn({uid:r.user.uid,displayName:r.user.displayName||name.trim()||"Player",email:r.user.email,photo:null});
+      const savedUser = load("su_user", null);
+      const preferredName = savedUser?.uid === r.user.uid ? savedUser.displayName : null;
+      onSignIn({uid:r.user.uid, displayName:preferredName||r.user.displayName||name.trim()||"Player", email:r.user.email, photo:null});
       onClose();
     } catch(e) {
       const uid=stableUid(email||"anon");
@@ -810,7 +829,7 @@ function AuthModal({ onClose, onSignIn }) {
 
 //
 function SportBadge({sportId}) {
-  const s=SPORT_MAP[sportId]; if(!s) return null;
+  const s = ALL_SPORT_MAP[sportId] || { label: sportId, emoji:"🏅", color:"#888", bg:"#f5f5f5" };
   return (
     <span style={{background:s.bg,color:s.color,padding:"3px 10px",borderRadius:99,fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4,border:`1px solid ${s.color}22`}}>
       {sportId==="pickleball" ? <PickleballIcon size={14}/> : s.emoji} {s.label}
@@ -818,7 +837,7 @@ function SportBadge({sportId}) {
   );
 }
 function EventCard({event,onClick,mode}) {
-  const s=SPORT_MAP[event.sport]||{color:"#888",bg:"#eee",emoji:"🏅"};
+  const s=ALL_SPORT_MAP[event.sport]||{label:event.sport||"Event",color:"#888",bg:"#eee",emoji:"🏅"};
   const m=MODES[mode]||MODES.pickup;
   const left=event.slots-event.joined.length;
   const [hov,setHov]=useState(false);
@@ -1107,7 +1126,7 @@ function EditEventModal({ event, onSave, onClose }) {
 
 //
 function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSlots, onUpdateDeadline, onUpdatePlayers, onUpdateEvent, onBack, onAuthRequired }) {
-  const s = SPORT_MAP[event.sport] || { color:"#888", bg:"#eee", label:"Sport", emoji:"🏅" };
+  const s = ALL_SPORT_MAP[event.sport] || { label:event.sport||"Event", color:"#888", bg:"#eee", emoji:"🏅" };
   const pt = event.participantType || (event.type==="tournament"?"teams":"players");
   const ptSingular = pt==="teams"?"team":"player";
   const spotsLeft = event.slots - event.joined.length;
@@ -1365,8 +1384,9 @@ function SportFilter({ value, onChange, surfaceBg, surfaceBorder }) {
   }, []);
 
   const options = [
-    { id:"all", label:"All events", icon:null },
+    { id:"all", label:"All events", emoji:null },
     ...SPORTS.map(s => ({ id:s.id, label:s.label, emoji:s.emoji, color:s.color })),
+    ...WELLNESS_EVENTS.map(w => ({ id:w.id, label:w.label, emoji:w.icon, color:w.color })),
   ];
   const selected = options.find(o => o.id === value) || options[0];
 
@@ -1597,9 +1617,11 @@ function CreatePage({ onCreated, currentUser, onAuthRequired, mode }) {
 
   const pickSport = (sportId) => {
     setChosenSport(sportId);
+    const isCustom = sportId === "custom";
     const isKnownSport = !!SPORT_MAP[sportId];
-    const wellnessEvent = WELLNESS_EVENTS?.find(w => w.id === sportId);
-    set("sport", isKnownSport ? sportId : (wellnessEvent?.label || sportId));
+    const isWellness = !!WELLNESS_EVENTS?.find(w => w.id === sportId);
+    // Always store the id — ALL_SPORT_MAP is keyed by id
+    set("sport", isCustom ? "" : sportId);
   };
 
   const genAI = async () => {
@@ -2260,6 +2282,12 @@ function AppInner() {
   const onUpdateProfile = ({ name, radius, locLabel, locCoords }) => {
     setUser(u => { const updated={...u,displayName:name}; save("su_user",updated); return updated; });
     const p = { radius, locLabel, locCoords }; setPrefs(p); save("su_prefs", p);
+    // Also update Firebase Auth profile so name persists on next sign-in
+    getFirebase().then(fb => {
+      if (fb.auth.currentUser) {
+        fb.updateProfile(fb.auth.currentUser, { displayName: name }).catch(e => console.warn("Profile update failed:", e));
+      }
+    }).catch(() => {});
   };
 
   // Keep selected event in sync when Firestore updates it
