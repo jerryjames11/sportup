@@ -1599,26 +1599,17 @@ function CreatePage({ onCreated, currentUser, onAuthRequired, mode }) {
     setAiLoad(false);
   };
 
-  const [submitting, setSubmitting] = useState(false);
   const submit = async () => {
     if(!currentUser){onAuthRequired();return;}
     const loc = form.locObj?.address || (form.locText||"").trim();
     if(!form.title||!form.date||!loc){alert("Please fill in title, date, and location.");return;}
     if(form.deadline){const d=new Date(form.deadline),ev=new Date(form.date+"T"+(form.time||"00:00")); if(d>=ev){alert("Deadline must be before event start");return;}}
     const ev={...form,id:"e"+Date.now(),joined:[],host:{uid:currentUser.uid,name:currentUser.displayName||currentUser.email?.split("@")[0]||"You"},location:loc,lat:form.locObj?.lat||null,lng:form.locObj?.lng||null,slots:Number(form.slots),deadline:form.deadline||null,participantType:form.type==="tournament"?form.participantType:"players"};
-    setSubmitting(true);
-    try {
-      const ok = await onCreated(ev);
-      if(ok) {
-        setSaved(true); setTimeout(()=>setSaved(false),2000);
-        setChosenSport(isPickup ? null : "basketball");
-        setForm({title:"",sport:"basketball",type:lockedType,date:"",time:"",locObj:null,locText:"",slots:10,description:"",tournamentFormat:"single",participantType:"teams",deadline:"",isPrivate:false});
-      }
-    } catch(err) {
-      alert("Something went wrong: " + (err?.message || String(err)));
-    } finally {
-      setSubmitting(false);
-    }
+    // Navigate away immediately — Firestore write happens in background
+    // Reset form state before navigating
+    setChosenSport(isPickup ? null : "basketball");
+    setForm({title:"",sport:"basketball",type:lockedType,date:"",time:"",locObj:null,locText:"",slots:10,description:"",tournamentFormat:"single",participantType:"teams",deadline:"",isPrivate:false});
+    onCreated(ev);
   };
 
   const lbl={fontSize:12,fontWeight:700,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,display:"block",marginBottom:5};
@@ -1734,8 +1725,8 @@ function CreatePage({ onCreated, currentUser, onAuthRequired, mode }) {
             ))}
           </div>
         </div>
-        <button onClick={submit} disabled={submitting} style={{padding:13,borderRadius:12,border:"none",background:saved?"#22C55E":submitting?"rgba(255,255,255,.2)":m.accent,color:"#fff",fontSize:15,fontWeight:700,cursor:submitting?"default":"pointer",transition:"background .3s",boxShadow:submitting?"none":`0 4px 20px ${m.accent}55`}}>
-          {saved?"✅ Event created!":submitting?"Saving...":currentUser?"Create event →":"Sign in to create →"}
+        <button onClick={submit} style={{padding:13,borderRadius:12,border:"none",background:m.accent,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",transition:"background .3s",boxShadow:`0 4px 20px ${m.accent}55`}}>
+          {currentUser?"Create event →":"Sign in to create →"}
         </button>
       </div>
     </div>
@@ -2199,24 +2190,21 @@ function AppInner() {
   }, []);
 
   const onCreated = useCallback(async (ev) => {
+    setPage("my");
     try {
       const fb = await getFirebase();
       const { id: _id, ...data } = ev;
       data.hostUid = ev.host?.uid || "";
       data.joinedUids = ev.joined?.map(j=>j.uid) || [];
-      // Ensure undefined values don't sneak in (Firestore rejects undefined)
       Object.keys(data).forEach(k => { if (data[k] === undefined) data[k] = null; });
       await fb.addDoc(fb.collection(fb.db, "events"), data);
-      setPage("my");
-      return true;
     } catch(e) {
       console.error("Firestore create error:", e);
       if (e.code === "permission-denied") {
         alert("Permission denied. Please sign out and sign back in, then try again.");
       } else {
-        alert("Failed to save event: " + (e.message || "Unknown error. Check your connection."));
+        alert("Failed to save event: " + (e.message || "Check your connection and try again."));
       }
-      return false;
     }
   }, []);
 
