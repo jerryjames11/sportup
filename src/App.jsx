@@ -689,7 +689,7 @@ function SeedingModal({ teams, onConfirm, onClose }) {
 }
 
 //
-function BracketView({ event }) {
+function BracketView({ event, isHost }) {
   const pt = event.participantType || "teams";
   const teams = event.joined.filter(j=>j.name!=="BYE");
   const [fmt, setFmt] = useState(() => event.tournamentFormat || "single");
@@ -706,14 +706,18 @@ function BracketView({ event }) {
   return (
     <div>
       {showSeed&&<SeedingModal teams={seeded||teams} onConfirm={confirm} onClose={()=>setShowSeed(false)}/>}
-      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-        {FORMATS.map(f=>(
-          <button key={f.id} onClick={()=>{setFmt(f.id);setKey(k=>k+1);}} style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${fmt===f.id?"#111":"#ddd"}`,background:fmt===f.id?"#111":"#fff",color:fmt===f.id?"#fff":"#666",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-            {f.id==="single"?"⚔️":f.id==="double"?"🔁":"🔄"} {f.label}
-          </button>
-        ))}
-      </div>
-      {fmt!=="robin"&&(
+      {/* Format switcher — host only */}
+      {isHost && (
+        <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+          {FORMATS.map(f=>(
+            <button key={f.id} onClick={()=>{setFmt(f.id);setKey(k=>k+1);}} style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${fmt===f.id?"#111":"#ddd"}`,background:fmt===f.id?"#111":"#fff",color:fmt===f.id?"#fff":"#666",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+              {f.id==="single"?"⚔️":f.id==="double"?"🔁":"🔄"} {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Seeding controls — host only */}
+      {isHost && fmt!=="robin"&&(
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,background:seeded?"#F0FBF4":"#FFFBEB",border:`1px solid ${seeded?"#2B8A3E22":"#FFD43B55"}`,borderRadius:10,padding:"10px 14px"}}>
           <div style={{flex:1,fontSize:13,color:seeded?"#2B8A3E":"#856404",fontWeight:600}}>
             {seeded?`✓ Seeding set · ${teams.length} ${pt} · ${byes??0} BYE${(byes??0)!==1?"s":""}`:`⚠️ No seeding -- ${pt} in registration order`}
@@ -777,7 +781,7 @@ function AuthModal({ onClose, onSignIn }) {
 
   const inp={padding:"10px 13px",borderRadius:10,border:"1.5px solid #ddd",fontSize:14,outline:"none",fontFamily:"inherit",width:"100%",boxSizing:"border-box"};
   return (
-    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
+    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
       <div style={{background:"#fff",borderRadius:20,padding:"28px 24px",width:360,maxWidth:"90vw",boxShadow:"0 20px 60px rgba(0,0,0,.2)"}} onClick={e=>e.stopPropagation()}>
         <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:22,color:"#111",marginBottom:4,letterSpacing:-.5}}> Welcome to SportUp</div>
         <p style={{fontSize:13,color:"#888",margin:"0 0 20px"}}>Sign in to join games, host events, and chat.</p>
@@ -789,8 +793,8 @@ function AuthModal({ onClose, onSignIn }) {
         <div style={{display:"flex",gap:0,marginBottom:14,border:"1.5px solid #eee",borderRadius:10,overflow:"hidden"}}>
           {["signin","signup"].map(m=><button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:8,border:"none",background:mode===m?"#111":"#fff",color:mode===m?"#fff":"#888",fontSize:13,fontWeight:600,cursor:"pointer"}}>{m==="signin"?"Sign in":"Sign up"}</button>)}
         </div>
-        <p style={{fontSize:11,color:"rgba(255,255,255,.25)",margin:"0 0 14px",textAlign:"center"}}>
-          By signing in you agree to our <a href="/privacy" target="_blank" style={{color:"rgba(255,255,255,.4)",textDecoration:"underline"}}>Privacy Policy</a>.
+        <p style={{fontSize:11,color:"#aaa",margin:"0 0 14px",textAlign:"center"}}>
+          By signing in you agree to our <a href="/privacy" target="_blank" style={{color:"#888",textDecoration:"underline"}}>Privacy Policy</a>.
         </p>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {mode==="signup"&&<input value={name} onChange={e=>setName(e.target.value)} placeholder="Display name" style={inp}/>}
@@ -993,9 +997,27 @@ function TeamRow({ event, team, currentUser, isHost, deadlinePassed, onUpdatePla
 }
 
 //
-function ContactsTab({ event }) {
+function ContactsTab({ event, isHost }) {
   const [copied, setCopied] = useState(null);
   const copyAll = () => { navigator.clipboard.writeText(event.joined.map(p=>[p.name,p.email||"--",p.phone||"--"].join("\t")).join("\n")).catch(()=>{}); setCopied("all"); setTimeout(()=>setCopied(null),2000); };
+
+  if (!isHost) return (
+    <div style={{padding:"20px 0",textAlign:"center"}}>
+      <div style={{fontSize:13,color:"#888",marginBottom:16}}>Participant list ({event.joined.length})</div>
+      <div style={{border:"1.5px solid #eee",borderRadius:12,overflow:"hidden"}}>
+        {event.joined.length===0
+          ? <div style={{color:"#ccc",fontSize:13,padding:"20px"}}>No participants yet</div>
+          : event.joined.map((p,i)=>(
+              <div key={i} style={{padding:"10px 16px",borderBottom:i<event.joined.length-1?"1px solid #f5f5f5":"none",fontSize:13,fontWeight:600,color:"#111",background:i%2===0?"#fff":"#fafafa",textAlign:"left"}}>
+                {p.hostAdded&&<span style={{opacity:.5,marginRight:4}}>✏️</span>}{p.name}
+              </div>
+            ))
+        }
+      </div>
+      <p style={{fontSize:11,color:"#bbb",marginTop:12}}>Contact info is only visible to the host.</p>
+    </div>
+  );
+
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -1135,7 +1157,7 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
     {id:"info",label:"Info"},
     {id:"chat",label:"Chat 💬"},
     ...(event.type==="tournament"?[{id:"bracket",label:"Bracket 🏆"}]:[]),
-    ...(isHost?[{id:"contacts",label:"Contacts 📇"}]:[]),
+    ...(isHost||isIn?[{id:"contacts",label:"Contacts 📇"}]:[]),
   ];
 
   return (
@@ -1319,8 +1341,8 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
             </div>
           )}
           {tab==="chat"&&<Chat eventId={event.id} currentUser={currentUser} event={event}/>}
-          {tab==="bracket"&&event.type==="tournament"&&<BracketView event={event}/>}
-          {tab==="contacts"&&isHost&&<ContactsTab event={event}/>}
+          {tab==="bracket"&&event.type==="tournament"&&<BracketView event={event} isHost={isHost}/>}
+          {tab==="contacts"&&(isHost||isIn)&&<ContactsTab event={event} isHost={isHost}/>}
         </div>
       </div>
     </div>
@@ -1373,14 +1395,10 @@ function SportFilter({ value, onChange, surfaceBg, surfaceBorder }) {
 }
 
 //
-function HomePage({ events, onOpen, setPage, mode, currentUser, prefs }) {
+function HomePage({ events, onOpen, setPage, mode, currentUser, prefs, loading, onBackToModes }) {
   const m = MODES[mode] || MODES.pickup;
   const [q, setQ] = useState("");
   const [sport, setSport] = useState("all");
-  const [loading, setLoading] = useState(true);
-
-  // Brief loading state so skeleton shows on slow connections instead of empty flash
-  useEffect(() => { const t = setTimeout(() => setLoading(false), 600); return () => clearTimeout(t); }, []);
 
   const hasLoc = prefs?.locCoords?.lat != null;
   const radius = prefs?.radius || 25;
@@ -1425,7 +1443,7 @@ function HomePage({ events, onOpen, setPage, mode, currentUser, prefs }) {
           ? [1,2,3].map(i => <EventCardSkeleton key={i}/>)
           : filtered.length===0
           ? <div style={{textAlign:"center",padding:"50px 20px",color:"rgba(255,255,255,.3)"}}>
-              <div style={{fontSize:40,marginBottom:12}}>{m.icon}</div>
+              <div style={{fontSize:40,marginBottom:12,display:"flex",justifyContent:"center",color:"rgba(255,255,255,.3)"}}><TabIcon id="create" size={44}/></div>
               <div style={{fontWeight:600,color:"rgba(255,255,255,.5)",fontSize:16}}>No events found</div>
               <div style={{fontSize:13,marginTop:8}}>Be the first -- <span style={{color:m.accent,cursor:"pointer",fontWeight:600}} onClick={()=>setPage("create")}>create one!</span></div>
             </div>
@@ -1581,16 +1599,26 @@ function CreatePage({ onCreated, currentUser, onAuthRequired, mode }) {
     setAiLoad(false);
   };
 
-  const submit = () => {
+  const [submitting, setSubmitting] = useState(false);
+  const submit = async () => {
     if(!currentUser){onAuthRequired();return;}
-    // Accept either geocoded address or freetext location
-    const loc = form.locObj?.address || form.locText.trim();
+    const loc = form.locObj?.address || (form.locText||"").trim();
     if(!form.title||!form.date||!loc){alert("Please fill in title, date, and location.");return;}
     if(form.deadline){const d=new Date(form.deadline),ev=new Date(form.date+"T"+(form.time||"00:00")); if(d>=ev){alert("Deadline must be before event start");return;}}
     const ev={...form,id:"e"+Date.now(),joined:[],host:{uid:currentUser.uid,name:currentUser.displayName||currentUser.email?.split("@")[0]||"You"},location:loc,lat:form.locObj?.lat||null,lng:form.locObj?.lng||null,slots:Number(form.slots),deadline:form.deadline||null,participantType:form.type==="tournament"?form.participantType:"players"};
-    onCreated(ev); setSaved(true); setTimeout(()=>setSaved(false),2000);
-    setChosenSport(isPickup ? null : "basketball");
-    setForm({title:"",sport:"basketball",type:lockedType,date:"",time:"",locObj:null,locText:"",slots:10,description:"",tournamentFormat:"single",participantType:"teams",deadline:"",isPrivate:false});
+    setSubmitting(true);
+    try {
+      const ok = await onCreated(ev);
+      if(ok) {
+        setSaved(true); setTimeout(()=>setSaved(false),2000);
+        setChosenSport(isPickup ? null : "basketball");
+        setForm({title:"",sport:"basketball",type:lockedType,date:"",time:"",locObj:null,locText:"",slots:10,description:"",tournamentFormat:"single",participantType:"teams",deadline:"",isPrivate:false});
+      }
+    } catch(err) {
+      alert("Something went wrong: " + (err?.message || String(err)));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const lbl={fontSize:12,fontWeight:700,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,display:"block",marginBottom:5};
@@ -1706,8 +1734,8 @@ function CreatePage({ onCreated, currentUser, onAuthRequired, mode }) {
             ))}
           </div>
         </div>
-        <button onClick={submit} style={{padding:13,borderRadius:12,border:"none",background:saved?"#22C55E":m.accent,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",transition:"background .3s",boxShadow:`0 4px 20px ${m.accent}55`}}>
-          {saved?"✅ Event created!":currentUser?"Create event →":"Sign in to create →"}
+        <button onClick={submit} disabled={submitting} style={{padding:13,borderRadius:12,border:"none",background:saved?"#22C55E":submitting?"rgba(255,255,255,.2)":m.accent,color:"#fff",fontSize:15,fontWeight:700,cursor:submitting?"default":"pointer",transition:"background .3s",boxShadow:submitting?"none":`0 4px 20px ${m.accent}55`}}>
+          {saved?"✅ Event created!":submitting?"Saving...":currentUser?"Create event →":"Sign in to create →"}
         </button>
       </div>
     </div>
@@ -1724,18 +1752,39 @@ function MyEventsPage({ events, currentUser, onOpen, mode }) {
       <p style={{color:"rgba(255,255,255,.4)",fontSize:14}}>Your hosted and joined events will appear here.</p>
     </div>
   );
-  const hosted=events.filter(e=>e.host?.uid===currentUser.uid);
-  const joined=events.filter(e=>e.joined.some(j=>j.uid===currentUser.uid)&&e.host?.uid!==currentUser.uid);
-  const Sec=({title,list})=>(
+  const hosted = events.filter(e=>e.host?.uid===currentUser.uid);
+  const joined  = events.filter(e=>e.joined.some(j=>j.uid===currentUser.uid)&&e.host?.uid!==currentUser.uid);
+
+  const eventMode = e => MODES[e.type==="tournament" ? "tournament" : "pickup"];
+
+  const Sec = ({title, list}) => (
     <div style={{marginBottom:28}}>
-      <h2 style={{fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:16,color:"rgba(255,255,255,.7)",margin:"0 0 12px",letterSpacing:-.3}}>{title} <span style={{color:"rgba(255,255,255,.3)",fontWeight:400}}>({list.length})</span></h2>
-      {list.length===0?<div style={{color:"rgba(255,255,255,.2)",fontSize:13,padding:"12px 0"}}>None yet</div>:<div style={{display:"grid",gap:12}}>{list.map(e=><EventCard key={e.id} event={e} onClick={()=>onOpen(e)} mode={mode}/>)}</div>}
+      <h2 style={{fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:16,color:"rgba(255,255,255,.7)",margin:"0 0 12px",letterSpacing:-.3}}>
+        {title} <span style={{color:"rgba(255,255,255,.3)",fontWeight:400}}>({list.length})</span>
+      </h2>
+      {list.length===0
+        ? <div style={{color:"rgba(255,255,255,.2)",fontSize:13,padding:"12px 0"}}>None yet</div>
+        : <div style={{display:"grid",gap:12}}>
+            {list.map(e => (
+              <div key={e.id} style={{position:"relative"}}>
+                <EventCard event={e} onClick={()=>onOpen(e)} mode={e.type==="tournament"?"tournament":"pickup"}/>
+                {/* Mode badge if different from current mode */}
+                {e.type !== (mode==="pickup"?"pickup":"tournament") && (
+                  <div style={{position:"absolute",top:10,right:10,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,background:eventMode(e).accent,color:"#fff",letterSpacing:.5,textTransform:"uppercase",opacity:.9}}>
+                    {eventMode(e).label}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+      }
     </div>
   );
+
   return (
     <div style={{maxWidth:700,margin:"0 auto",padding:"24px 16px"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:28}}>
-        <div style={{width:44,height:44,borderRadius:"50%",background:m.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,color:"#fff",overflow:"hidden",flexShrink:0,boxShadow:`0 0 20px ${m.accent}66`}}>
+        <div style={{width:44,height:44,borderRadius:"50%",background:m.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,color:"#fff",overflow:"hidden",flexShrink:0,boxShadow:("0 0 20px "+m.accent+"66")}}>
           {currentUser.photo?<img src={currentUser.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:currentUser.displayName?.[0]?.toUpperCase()||"U"}
         </div>
         <div>
@@ -1782,8 +1831,9 @@ function SplashScreen({ onDone }) {
 }
 
 //
-function ModeSelector({ onSelect }) {
-  const [hovered, setHovered] = useState(null);
+function ModeSelector({ onSelect, onAuth, user }) {
+  const [hovered, setHovered] = useState(false);
+  const m = MODES.pickup;
   return (
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"#0A0A0F",display:"flex",flexDirection:"column",zIndex:9000}}>
       {/* Header */}
@@ -1792,91 +1842,62 @@ function ModeSelector({ onSelect }) {
         <div style={{fontSize:13,color:"rgba(255,255,255,.4)",marginTop:6,fontWeight:500}}>What are you here for?</div>
       </div>
 
-      {/* Two mode cards -- row on desktop, column on mobile */}
-      <div style={{flex:1,display:"flex",flexDirection:"column",gap:12,padding:"0 16px 32px",minHeight:0,overflowY:"auto"}}>
-        <style dangerouslySetInnerHTML={{__html:"@media(min-width:500px){.mode-cards{flex-direction:row!important}}"}} />
-        <div className="mode-cards" style={{display:"flex",flexDirection:"column",gap:12,height:"100%"}}>
-        {Object.entries(MODES).map(([modeId, m]) => {
-          const isPickup = modeId === "pickup";
-          const active = hovered === modeId;
-          return (
-            <div key={modeId}
-              onClick={() => onSelect(modeId)}
-              onMouseEnter={() => setHovered(modeId)}
-              onMouseLeave={() => setHovered(null)}
-              style={{
-                flex:1, borderRadius:20, margin:"0 8px", cursor:"pointer", position:"relative", overflow:"hidden",
-                background: isPickup
-                  ? ("linear-gradient(160deg, #1A0800 0%, #2D1000 60%, "+(active?"#3D1800":"#251000")+" 100%)")
-                  : ("linear-gradient(160deg, #00081A 0%, #001030 60%, "+(active?"#001840":"#000C25")+" 100%)"),
-                border:("1.5px solid "+(active ? m.accent : "rgba(255,255,255,.08)")),
-                transition:"all .25s ease",
-                transform: active ? "scale(1.02)" : "scale(1)",
-                boxShadow: active ? ("0 20px 60px "+m.accent+"44") : "0 4px 20px rgba(0,0,0,.4)",
-                margin:0,
-              }}>
-              {/* Glow blob */}
-              <div style={{position:"absolute",top:"20%",left:"50%",transform:"translateX(-50%)",width:"70%",height:"50%",background:("radial-gradient(ellipse, "+m.accent+(active?"44":"22")+" 0%, transparent 70%)"),pointerEvents:"none",transition:"all .25s"}}/>
-              {/* Content */}
-              <div className="mode-card-content" style={{position:"relative",height:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 16px",textAlign:"center"}}>
-                {/* Illustration */}
-                <div style={{marginBottom:20,filter:("drop-shadow(0 0 24px "+m.accent+"88)"),transition:"all .25s",transform:active?"scale(1.08)":"scale(1)"}}>
-                  {isPickup ? (
-                    <svg width="72" height="80" viewBox="0 0 72 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="8" y="14" width="56" height="62" rx="5" fill={m.accent+"33"} stroke={m.accent} strokeWidth="2.5"/>
-                      <rect x="24" y="6" width="24" height="14" rx="4" fill={m.accent} opacity="0.9"/>
-                      <rect x="18" y="32" width="36" height="3" rx="1.5" fill={m.accent} opacity="0.7"/>
-                      <rect x="18" y="42" width="28" height="3" rx="1.5" fill={m.accent} opacity="0.5"/>
-                      <rect x="18" y="52" width="32" height="3" rx="1.5" fill={m.accent} opacity="0.5"/>
-                      <rect x="18" y="62" width="20" height="3" rx="1.5" fill={m.accent} opacity="0.35"/>
-                      <circle cx="14" cy="33.5" r="2.5" fill={m.accent} opacity="0.8"/>
-                      <circle cx="14" cy="43.5" r="2.5" fill={m.accent} opacity="0.6"/>
-                      <circle cx="14" cy="53.5" r="2.5" fill={m.accent} opacity="0.6"/>
-                      <circle cx="14" cy="63.5" r="2.5" fill={m.accent} opacity="0.4"/>
-                    </svg>
-                  ) : (
-                    <svg width="80" height="72" viewBox="0 0 80 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      
-                      <rect x="2" y="4"  width="22" height="10" rx="3" fill={m.accent+"44"} stroke={m.accent} strokeWidth="1.8"/>
-                      <rect x="2" y="22" width="22" height="10" rx="3" fill={m.accent+"44"} stroke={m.accent} strokeWidth="1.8"/>
-                      {/* connector: horizontal from each slot, vertical joining them, line to semifinal */}
-                      <line x1="24" y1="9"  x2="32" y2="9"  stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
-                      <line x1="24" y1="27" x2="32" y2="27" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
-                      <line x1="32" y1="9"  x2="32" y2="27" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
-                      <line x1="32" y1="18" x2="40" y2="18" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
-
-                      
-                      <rect x="2" y="38" width="22" height="10" rx="3" fill={m.accent+"44"} stroke={m.accent} strokeWidth="1.8"/>
-                      <rect x="2" y="56" width="22" height="10" rx="3" fill={m.accent+"44"} stroke={m.accent} strokeWidth="1.8"/>
-                      <line x1="24" y1="43" x2="32" y2="43" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
-                      <line x1="24" y1="61" x2="32" y2="61" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
-                      <line x1="32" y1="43" x2="32" y2="61" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
-                      <line x1="32" y1="52" x2="40" y2="52" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
-
-                      
-                      <line x1="40" y1="18" x2="40" y2="52" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
-                      <line x1="40" y1="35" x2="50" y2="35" stroke={m.accent} strokeWidth="1.8" opacity="0.75"/>
-
-                      
-                      <rect x="50" y="26" width="26" height="18" rx="4" fill={m.accent} opacity="0.9"/>
-                      <text x="63" y="39" textAnchor="middle" fontSize="13" fill="#fff">🏆</text>
-                    </svg>
-                  )}
-                </div>
-                <div className="mode-card-title" style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:26,color:"#fff",letterSpacing:-1,marginBottom:8}}>{m.label}</div>
-                <div className="mode-card-tagline" style={{fontSize:13,color:m.accent,fontWeight:600,letterSpacing:.5,marginBottom:28}}>{m.tagline}</div>
-                {/* CTA */}
-                <div style={{background:m.accent,color:"#fff",fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:13,padding:"11px 20px",borderRadius:99,boxShadow:("0 4px 20px "+m.accent+"66"),transition:"all .25s",transform:active?"scale(1.05)":"scale(1)",whiteSpace:"nowrap",textAlign:"center",maxWidth:"100%"}}>
-                  {isPickup ? "Find an event" : "Enter a tournament"} →
-                </div>
-              </div>
+      {/* Pickup card — full width */}
+      <div style={{flex:1,padding:"0 16px 16px",display:"flex",flexDirection:"column",minHeight:0}}>
+        <div
+          onClick={() => onSelect("pickup")}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          style={{flex:1,borderRadius:20,cursor:"pointer",position:"relative",overflow:"hidden",
+            background:("linear-gradient(160deg, #1A0800 0%, #2D1000 60%, "+(hovered?"#3D1800":"#251000")+" 100%)"),
+            border:("1.5px solid "+(hovered?m.accent:"rgba(255,255,255,.08)")),
+            transition:"all .25s ease",
+            transform:hovered?"scale(1.01)":"scale(1)",
+            boxShadow:hovered?("0 20px 60px "+m.accent+"44"):"0 4px 20px rgba(0,0,0,.4)",
+          }}>
+          {/* Glow */}
+          <div style={{position:"absolute",top:"20%",left:"50%",transform:"translateX(-50%)",width:"70%",height:"50%",background:("radial-gradient(ellipse, "+m.accent+(hovered?"44":"22")+" 0%, transparent 70%)"),pointerEvents:"none",transition:"all .25s"}}/>
+          {/* Content */}
+          <div style={{position:"relative",height:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 16px",textAlign:"center"}}>
+            <div style={{marginBottom:20,filter:("drop-shadow(0 0 24px "+m.accent+"88)"),transition:"all .25s",transform:hovered?"scale(1.08)":"scale(1)"}}>
+              <svg width="72" height="80" viewBox="0 0 72 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="8" y="14" width="56" height="62" rx="5" fill={m.accent+"33"} stroke={m.accent} strokeWidth="2.5"/>
+                <rect x="24" y="6" width="24" height="14" rx="4" fill={m.accent} opacity="0.9"/>
+                <rect x="18" y="32" width="36" height="3" rx="1.5" fill={m.accent} opacity="0.7"/>
+                <rect x="18" y="42" width="28" height="3" rx="1.5" fill={m.accent} opacity="0.5"/>
+                <rect x="18" y="52" width="32" height="3" rx="1.5" fill={m.accent} opacity="0.5"/>
+                <rect x="18" y="62" width="20" height="3" rx="1.5" fill={m.accent} opacity="0.35"/>
+                <circle cx="14" cy="33.5" r="2.5" fill={m.accent} opacity="0.8"/>
+                <circle cx="14" cy="43.5" r="2.5" fill={m.accent} opacity="0.6"/>
+                <circle cx="14" cy="53.5" r="2.5" fill={m.accent} opacity="0.6"/>
+                <circle cx="14" cy="63.5" r="2.5" fill={m.accent} opacity="0.4"/>
+              </svg>
             </div>
-          );
-        })}
+            <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:28,color:"#fff",letterSpacing:-1,marginBottom:8}}>Pickup</div>
+            <div style={{fontSize:13,color:m.accent,fontWeight:600,letterSpacing:.5,marginBottom:28}}>{m.tagline}</div>
+            <div style={{background:m.accent,color:"#fff",fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:15,padding:"13px 36px",borderRadius:99,boxShadow:("0 4px 20px "+m.accent+"66"),transition:"all .25s",transform:hovered?"scale(1.05)":"scale(1)",whiteSpace:"nowrap"}}>
+              Find an event →
+            </div>
+            {!user && (
+              <button onClick={(e)=>{e.stopPropagation();onAuth();}}
+                style={{marginTop:14,padding:"11px 36px",borderRadius:99,border:"1.5px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.07)",color:"rgba(255,255,255,.75)",fontFamily:"'DM Sans',sans-serif",fontWeight:600,fontSize:14,cursor:"pointer",whiteSpace:"nowrap",transition:"all .2s"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,.14)";e.currentTarget.style.color="#fff";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,.07)";e.currentTarget.style.color="rgba(255,255,255,.75)";}}>
+                Sign in
+              </button>
+            )}
+          </div>
         </div>
       </div>
-      <div style={{textAlign:"center",padding:"0 0 20px"}}>
-        <a href="/privacy" target="_blank" style={{fontSize:11,color:"rgba(255,255,255,.2)",textDecoration:"underline",fontFamily:"'DM Sans',sans-serif"}}>Privacy Policy</a>
+
+      {/* Bottom links */}
+      <div style={{textAlign:"center",padding:"0 0 24px",display:"flex",alignItems:"center",justifyContent:"center",gap:20}}>
+        <button onClick={() => onSelect("tournament")}
+          style={{fontSize:12,color:"rgba(255,255,255,.3)",background:"none",border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textDecoration:"underline",padding:0}}>
+          Looking for a tournament?
+        </button>
+        <span style={{color:"rgba(255,255,255,.15)",fontSize:12}}>·</span>
+        <a href="/privacy" target="_blank" style={{fontSize:12,color:"rgba(255,255,255,.2)",fontFamily:"'DM Sans',sans-serif",textDecoration:"underline"}}>Privacy Policy</a>
       </div>
     </div>
   );
@@ -2084,26 +2105,9 @@ function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile
 //
 function AppInner() {
   const [appState, setAppState] = useState("splash"); // splash | mode | app
-  const [mode, setMode] = useState(() => load("su_mode", null)); // pickup | tournament | null
-  const [events, setEvents] = useState(() => {
-    // Clear old corrupted data where SAMPLE_HOST_UID was replaced with real user uids.
-    // We detect this by checking if any sample event host uid matches a stored user uid.
-    const storedUser = load("su_user", null);
-    const storedEvents = load("su_events_v3", null);
-    if (storedEvents && storedUser?.uid) {
-      const sampleIds = ["e1","e2","e3","e4","e5"];
-      const corrupted = storedEvents.some(e =>
-        sampleIds.includes(e.id) && e.host?.uid === storedUser.uid
-      );
-      if (corrupted) {
-        // Wipe the stale event store -- user's own created events are lost but
-        // sample data will reload clean without host contamination
-        localStorage.removeItem("su_events_v3");
-        return SAMPLE_EVENTS;
-      }
-    }
-    return storedEvents || SAMPLE_EVENTS;
-  });
+  const [mode, setMode] = useState(() => load("su_mode", null));
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
   const [page, setPage] = useState("home");
   const [selected, setSelected] = useState(null);
   const [user, setUser] = useState(() => load("su_user", null));
@@ -2113,16 +2117,38 @@ function AppInner() {
   const evRef = useRef(events);
   useEffect(() => { evRef.current = events; }, [events]);
 
-  // After splash, go to mode selector if no mode saved, else straight to app
+  // Real-time Firestore listener for all events
+  useEffect(() => {
+    let unsub = null;
+    const setup = async () => {
+      try {
+        const fb = await getFirebase();
+        const col = fb.collection(fb.db, "events");
+        unsub = fb.onSnapshot(col, snap => {
+          const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          setEvents(docs);
+          setEventsLoading(false);
+        }, err => {
+          console.error("Firestore listener error:", err);
+          setEventsLoading(false);
+        });
+      } catch(e) {
+        console.error("Firestore init error:", e);
+        setEventsLoading(false);
+      }
+    };
+    setup();
+    return () => { if (unsub) unsub(); };
+  }, []);
+
   const onSplashDone = useCallback(() => {
-    if (mode) setAppState("app");
-    else setAppState("mode");
-  }, [mode]);
+    setAppState("mode");
+  }, []);
 
   const onSelectMode = (m) => { setMode(m); save("su_mode", m); setAppState("app"); setPage("home"); setSelected(null); };
   const onBackToModes = () => { setAppState("mode"); setSelected(null); setPage("home"); };
 
-  useEffect(() => { save("su_events_v3", events); }, [events]);
+  // Remove localStorage event sync — Firestore is the source of truth now
   useEffect(() => { save("su_user", user); }, [user]);
   useEffect(() => {
     // Viewport meta -- critical for mobile browsers
@@ -2162,32 +2188,91 @@ function AppInner() {
     return ()=>window.removeEventListener("hashchange",h);
   }, [openFromHash]);
 
-  const patch = useCallback((id, fn) => {
-    setEvents(ev => ev.map(e => e.id===id ? fn(e) : e));
-    setSelected(prev => prev?.id===id ? fn(prev) : prev);
+  // Firestore helpers
+  const fsUpdate = useCallback(async (id, data) => {
+    try {
+      const fb = await getFirebase();
+      await fb.updateDoc(fb.doc(fb.db, "events", id), data);
+      // Optimistically update local selected state too
+      setSelected(prev => prev?.id===id ? {...prev,...data} : prev);
+    } catch(e) { console.error("Firestore update error:", e); }
   }, []);
 
-  const onJoin       = useCallback((id,p)           => patch(id, e=>({...e,joined:[...e.joined,p]})), [patch]);
-  const onLeave      = useCallback((id,uid2)         => patch(id, e=>({...e,joined:e.joined.filter(j=>j.uid!==uid2)})), [patch]);
-  const onUpdSlots   = useCallback((id,n)            => patch(id, e=>({...e,slots:n})), [patch]);
-  const onUpdDL      = useCallback((id,dl)           => patch(id, e=>({...e,deadline:dl})), [patch]);
-  const onUpdPlayers = useCallback((id,tuid,pl,name) => patch(id, e=>({...e,joined:e.joined.map(j=>j.uid===tuid?{...j,players:pl,...(name?{name}:{})}:j)})), [patch]);
-  const onUpdEvent   = useCallback((updated)         => patch(updated.id, ()=>updated), [patch]);
-  const onCancel     = useCallback((id)              => { setEvents(ev=>ev.filter(e=>e.id!==id)); setSelected(null); }, []);
-  const onCreated    = useCallback((ev)              => { setEvents(ev2=>[ev,...ev2]); setPage("my"); }, []);
+  const onCreated = useCallback(async (ev) => {
+    try {
+      const fb = await getFirebase();
+      const { id: _id, ...data } = ev;
+      data.hostUid = ev.host?.uid || "";
+      data.joinedUids = ev.joined?.map(j=>j.uid) || [];
+      // Ensure undefined values don't sneak in (Firestore rejects undefined)
+      Object.keys(data).forEach(k => { if (data[k] === undefined) data[k] = null; });
+      await fb.addDoc(fb.collection(fb.db, "events"), data);
+      setPage("my");
+      return true;
+    } catch(e) {
+      console.error("Firestore create error:", e);
+      if (e.code === "permission-denied") {
+        alert("Permission denied. Please sign out and sign back in, then try again.");
+      } else {
+        alert("Failed to save event: " + (e.message || "Unknown error. Check your connection."));
+      }
+      return false;
+    }
+  }, []);
+
+  const onJoin = useCallback(async (id, p) => {
+    const ev = evRef.current.find(e=>e.id===id); if(!ev) return;
+    const newJoined = [...(ev.joined||[]), p];
+    await fsUpdate(id, { joined: newJoined, joinedUids: newJoined.map(j=>j.uid) });
+  }, [fsUpdate]);
+
+  const onLeave = useCallback(async (id, uid2) => {
+    const ev = evRef.current.find(e=>e.id===id); if(!ev) return;
+    const newJoined = (ev.joined||[]).filter(j=>j.uid!==uid2);
+    await fsUpdate(id, { joined: newJoined, joinedUids: newJoined.map(j=>j.uid) });
+  }, [fsUpdate]);
+
+  const onCancel = useCallback(async (id) => {
+    try {
+      const fb = await getFirebase();
+      await fb.deleteDoc(fb.doc(fb.db, "events", id));
+      setSelected(null);
+    } catch(e) { console.error("Firestore delete error:", e); }
+  }, []);
+
+  const onUpdSlots   = useCallback((id,n)   => fsUpdate(id, {slots:n}), [fsUpdate]);
+  const onUpdDL      = useCallback((id,dl)  => fsUpdate(id, {deadline:dl}), [fsUpdate]);
+  const onUpdEvent   = useCallback(async (updated) => {
+    const { id, ...data } = updated;
+    await fsUpdate(id, data);
+  }, [fsUpdate]);
+  const onUpdPlayers = useCallback(async (id,tuid,pl,name) => {
+    const ev = evRef.current.find(e=>e.id===id); if(!ev) return;
+    const newJoined = (ev.joined||[]).map(j=>j.uid===tuid?{...j,players:pl,...(name?{name}:{})}:j);
+    await fsUpdate(id, { joined: newJoined });
+  }, [fsUpdate]);
+
   const onSignOut       = () => { setUser(null); save("su_user",null); };
   const onUpdateProfile = ({ name, radius, locLabel, locCoords }) => {
     setUser(u => { const updated={...u,displayName:name}; save("su_user",updated); return updated; });
     const p = { radius, locLabel, locCoords }; setPrefs(p); save("su_prefs", p);
   };
 
+  // Keep selected event in sync when Firestore updates it
+  useEffect(() => {
+    if (selected) {
+      const updated = events.find(e => e.id === selected.id);
+      if (updated) setSelected(updated);
+    }
+  }, [events]);
   const openEvent  = (ev) => { setSelected(ev); window.location.hash=`event=${ev.id}`; };
   const closeEvent = ()   => { setSelected(null); window.history.replaceState(null,"",window.location.pathname+window.location.search); };
   const navPage    = (p)  => { setSelected(null); window.location.hash=""; setPage(p); };
 
   // Filter events to current mode
   const modeEvents = events.filter(e => mode==="pickup" ? e.type==="pickup" : e.type==="tournament");
-  const myCount = user ? modeEvents.filter(e=>e.host?.uid===user.uid||e.joined.some(j=>j.uid===user.uid)).length : 0;
+  const allMyEvents = user ? events.filter(e => e.host?.uid===user.uid || e.joined.some(j=>j.uid===user.uid)) : [];
+  const myCount = allMyEvents.length;
 
   const m = MODES[mode] || MODES.pickup;
 
@@ -2196,7 +2281,12 @@ function AppInner() {
   const pageBg = mode==="tournament" ? "#0F1420" : "#180A00";
 
   if (appState==="splash") return <SplashScreen onDone={onSplashDone}/>;
-  if (appState==="mode")   return <ModeSelector onSelect={onSelectMode}/>;
+  if (appState==="mode")   return (
+    <>
+      <ModeSelector onSelect={onSelectMode} onAuth={()=>setShowAuth(true)} user={user}/>
+      {showAuth&&<AuthModal onClose={()=>setShowAuth(false)} onSignIn={u=>{setUser(u);setShowAuth(false);if(u)onSelectMode("pickup");}}/>}
+    </>
+  );
 
   return (
     <div style={{fontFamily:"'DM Sans',sans-serif",minHeight:"100vh",background:pageBg}}>
@@ -2209,9 +2299,18 @@ function AppInner() {
             onJoin={onJoin} onLeave={onLeave} onCancel={onCancel}
             onUpdateSlots={onUpdSlots} onUpdateDeadline={onUpdDL} onUpdatePlayers={onUpdPlayers} onUpdateEvent={onUpdEvent}
             onBack={closeEvent} onAuthRequired={()=>setShowAuth(true)}/>
-        : page==="home"   ? <HomePage   events={modeEvents} onOpen={openEvent} setPage={setPage} mode={mode} currentUser={user} prefs={prefs}/>
+        : page==="home"   ? <HomePage   events={modeEvents} onOpen={openEvent} setPage={setPage} mode={mode} currentUser={user} prefs={prefs} loading={eventsLoading} onBackToModes={onBackToModes}/>
         : page==="create" ? <CreatePage onCreated={onCreated} currentUser={user} onAuthRequired={()=>setShowAuth(true)} mode={mode}/>
-        :                   <MyEventsPage events={modeEvents} currentUser={user} onOpen={openEvent} mode={mode}/>}
+        :                   <MyEventsPage events={allMyEvents} currentUser={user} onOpen={openEvent} mode={mode}/>}
+      {/* Footer — tournament link on pickup home */}
+      {!selected && mode==="pickup" && page==="home" && (
+        <div style={{textAlign:"center",padding:"12px 0 24px",borderTop:"1px solid rgba(255,255,255,.06)",marginTop:8}}>
+          <button onClick={()=>onSelectMode("tournament")}
+            style={{fontSize:12,color:"rgba(255,255,255,.25)",background:"none",border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textDecoration:"underline",padding:0}}>
+            Looking for a tournament?
+          </button>
+        </div>
+      )}
     </div>
   );
 }
