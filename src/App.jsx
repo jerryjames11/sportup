@@ -1395,7 +1395,7 @@ function SportFilter({ value, onChange, surfaceBg, surfaceBorder }) {
 }
 
 //
-function HomePage({ events, onOpen, setPage, mode, currentUser, prefs, loading, onBackToModes }) {
+function HomePage({ events, onOpen, setPage, mode, currentUser, prefs, loading, onBackToModes, firestoreError }) {
   const m = MODES[mode] || MODES.pickup;
   const [q, setQ] = useState("");
   const [sport, setSport] = useState("all");
@@ -1421,6 +1421,11 @@ function HomePage({ events, onOpen, setPage, mode, currentUser, prefs, loading, 
   const surfaceBorder = "rgba(255,255,255,.18)";
   return (
     <div style={{maxWidth:700,margin:"0 auto",padding:"28px 16px"}}>
+      {firestoreError && (
+        <div style={{background:"rgba(201,42,42,.15)",border:"1.5px solid rgba(201,42,42,.4)",borderRadius:12,padding:"12px 16px",marginBottom:16,fontSize:13,color:"#ff8080"}}>
+          ⚠️ Could not load events: <strong>{firestoreError}</strong>. Check your Firestore rules and connection.
+        </div>
+      )}
       <div style={{marginBottom:24}}>
         <h1 style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:30,color:"#fff",margin:"0 0 6px",letterSpacing:-1}}>
           {mode==="pickup" ? "Find a pickup event" : "Find a tournament"}
@@ -2108,6 +2113,8 @@ function AppInner() {
   const evRef = useRef(events);
   useEffect(() => { evRef.current = events; }, [events]);
 
+  const [firestoreError, setFirestoreError] = useState(null);
+
   // Real-time Firestore listener for all events
   useEffect(() => {
     let unsub = null;
@@ -2119,13 +2126,16 @@ function AppInner() {
           const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           setEvents(docs);
           setEventsLoading(false);
+          setFirestoreError(null);
         }, err => {
-          console.error("Firestore listener error:", err);
+          console.error("Firestore listener error:", err.code, err.message);
           setEventsLoading(false);
+          setFirestoreError(err.code || err.message);
         });
       } catch(e) {
         console.error("Firestore init error:", e);
         setEventsLoading(false);
+        setFirestoreError(e.message || "Connection failed");
       }
     };
     setup();
@@ -2287,7 +2297,7 @@ function AppInner() {
             onJoin={onJoin} onLeave={onLeave} onCancel={onCancel}
             onUpdateSlots={onUpdSlots} onUpdateDeadline={onUpdDL} onUpdatePlayers={onUpdPlayers} onUpdateEvent={onUpdEvent}
             onBack={closeEvent} onAuthRequired={()=>setShowAuth(true)}/>
-        : page==="home"   ? <HomePage   events={modeEvents} onOpen={openEvent} setPage={setPage} mode={mode} currentUser={user} prefs={prefs} loading={eventsLoading} onBackToModes={onBackToModes}/>
+        : page==="home"   ? <HomePage   events={modeEvents} onOpen={openEvent} setPage={setPage} mode={mode} currentUser={user} prefs={prefs} loading={eventsLoading} onBackToModes={onBackToModes} firestoreError={firestoreError}/>
         : page==="create" ? <CreatePage onCreated={onCreated} currentUser={user} onAuthRequired={()=>setShowAuth(true)} mode={mode}/>
         :                   <MyEventsPage events={allMyEvents} currentUser={user} onOpen={openEvent} mode={mode}/>}
       {/* Footer — tournament link on pickup home */}
