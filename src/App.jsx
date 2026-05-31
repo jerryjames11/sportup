@@ -127,14 +127,13 @@ async function callClaude(prompt) {
 let _fb = null;
 async function getFirebase() {
   if (_fb) return _fb;
-  //
   const cfg = {
-    apiKey:            "REPLACE_WITH_YOUR_API_KEY",
-    authDomain:        "REPLACE_WITH_YOUR_AUTH_DOMAIN",
-    projectId:         "REPLACE_WITH_YOUR_PROJECT_ID",
-    storageBucket:     "REPLACE_WITH_YOUR_STORAGE_BUCKET",
-    messagingSenderId: "REPLACE_WITH_YOUR_MESSAGING_SENDER_ID",
-    appId:             "REPLACE_WITH_YOUR_APP_ID",
+    apiKey:            (window.__FB_API_KEY__            || ""),
+    authDomain:        (window.__FB_AUTH_DOMAIN__        || ""),
+    projectId:         (window.__FB_PROJECT_ID__         || ""),
+    storageBucket:     (window.__FB_STORAGE_BUCKET__     || ""),
+    messagingSenderId: (window.__FB_MESSAGING_SENDER_ID__|| ""),
+    appId:             (window.__FB_APP_ID__             || ""),
   };
   //
   const [app, auth, fs] = await Promise.all([
