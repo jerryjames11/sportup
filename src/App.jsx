@@ -1418,6 +1418,10 @@ function HomePage({ events, onOpen, setPage, mode, currentUser, prefs, loading, 
       if (d > radius) return false;
     }
     return true;
+  }).sort((a, b) => {
+    const da = new Date(`${a.date}T${a.time||"00:00"}`);
+    const db = new Date(`${b.date}T${b.time||"00:00"}`);
+    return da - db;
   });
   const surfaceBg = "rgba(255,255,255,.11)";
   const surfaceBorder = "rgba(255,255,255,.18)";
