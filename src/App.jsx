@@ -791,9 +791,8 @@ function AuthModal({ onClose, onSignIn }) {
       onSignIn({uid:r.user.uid, displayName:preferredName||r.user.displayName||name.trim()||"Player", email:r.user.email, photo:null});
       onClose();
     } catch(e) {
-      const uid=stableUid(email||"anon");
-      onSignIn({uid,displayName:name.trim()||"Player",email,photo:null});
-      onClose();
+      const msg = e.code==="auth/wrong-password"||e.code==="auth/invalid-credential" ? "Incorrect email or password." : e.code==="auth/user-not-found" ? "No account with that email." : e.code==="auth/email-already-in-use" ? "An account with that email already exists." : "Sign in failed. Please try again.";
+      setErr(msg);
     }
     setLoading(false);
   };
@@ -1138,6 +1137,7 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
 
   const [confirmRemove, setConfirmRemove] = useState(null); // { uid, name }
   const [showCancel, setShowCancel] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [tab, setTab] = useState("info");
   const [showJoin, setShowJoin] = useState(false);
@@ -1353,6 +1353,31 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
                 <button onClick={()=>setShowCancel(true)} style={{width:"100%",padding:11,borderRadius:11,border:"1.5px solid #C92A2A33",background:"#FFF5F5",color:"#C92A2A",fontWeight:700,fontSize:13,cursor:"pointer"}}>
                   🗑️ Cancel this event
                 </button>
+              )}
+              {isHost&&event.joined.length>0&&(
+                <button onClick={()=>setShowTransfer(true)} style={{width:"100%",padding:11,borderRadius:11,border:"1.5px solid #ddd",background:"#fafafa",color:"#555",fontWeight:600,fontSize:13,cursor:"pointer"}}>
+                  👑 Transfer host role
+                </button>
+              )}
+              {showTransfer&&(
+                <div style={{background:"#fff",border:"1.5px solid #eee",borderRadius:14,padding:"16px"}}>
+                  <div style={{fontWeight:700,fontSize:14,color:"#111",marginBottom:4}}>Transfer host to:</div>
+                  <p style={{fontSize:12,color:"#888",margin:"0 0 12px"}}>They will gain full host controls. You will become a regular participant.</p>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {event.joined.map(p=>(
+                      <button key={p.uid} onClick={()=>{
+                        onUpdateEvent({...event,host:{uid:p.uid,name:p.name},hostUid:p.uid});
+                        setShowTransfer(false);
+                      }} style={{padding:"10px 14px",borderRadius:10,border:"1.5px solid #eee",background:"#fff",color:"#111",fontWeight:600,fontSize:13,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:8}}
+                        onMouseEnter={e=>e.currentTarget.style.background="#f5f5f5"}
+                        onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                        <span style={{width:28,height:28,borderRadius:"50%",background:"#111",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,flexShrink:0}}>{p.name?.[0]?.toUpperCase()||"?"}</span>
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={()=>setShowTransfer(false)} style={{marginTop:10,width:"100%",padding:8,borderRadius:9,border:"1px solid #eee",background:"#fff",color:"#aaa",fontSize:12,cursor:"pointer"}}>Cancel</button>
+                </div>
               )}
 
               <button onClick={getTips} disabled={aiLoad} style={{width:"100%",padding:11,borderRadius:11,border:"1.5px solid #D0A8F5",background:"#F8F0FF",color:"#7B2FBE",fontWeight:700,fontSize:14,cursor:"pointer"}}>
