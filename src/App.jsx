@@ -2378,7 +2378,7 @@ const TabIcon = ({ id, size=16 }) => {
   return null;
 };
 
-function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile, prefs, mode, onBackToModes }) {
+function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile, prefs, mode, onBackToModes, onOpenProfile }) {
   const m = MODES[mode] || MODES.pickup;
   const [showProfile, setShowProfile] = useState(false);
   const [notifs, setNotifs] = useState([]);
@@ -2409,7 +2409,6 @@ function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile
 
   return (
     <>
-      {showProfile && <UserProfilePanel user={user} prefs={prefs} onSave={onUpdateProfile} onClose={()=>setShowProfile(false)} onSignOut={onSignOut}/>}
       {showNotifs && (
         <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9998}} onClick={()=>setShowNotifs(false)}>
           <div style={{position:"absolute",top:58,right:10,width:300,maxWidth:"90vw",background:"#1a1a2e",border:"1px solid rgba(255,255,255,.15)",borderRadius:14,overflow:"hidden",boxShadow:"0 8px 32px rgba(0,0,0,.5)"}} onClick={e=>e.stopPropagation()}>
@@ -2452,7 +2451,7 @@ function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile
                 🔔
                 {unread>0&&<span style={{position:"absolute",top:0,right:0,background:"#C92A2A",color:"#fff",borderRadius:99,fontSize:9,padding:"1px 4px",fontWeight:800,minWidth:14,textAlign:"center"}}>{unread}</span>}
               </button>
-              <button onClick={()=>setShowProfile(true)} title="Profile & preferences"
+              <button onClick={()=>onOpenProfile?onOpenProfile():setShowProfile(true)} title="Profile & preferences"
                 style={{width:30,height:30,borderRadius:"50%",background:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"visible",border:"none",cursor:"pointer",padding:0}}>
                 <div style={{width:30,height:30,borderRadius:"50%",background:user.avatarBg||m.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:user.avatarEmoji?16:11,fontWeight:700,color:"#fff",overflow:"hidden",flexShrink:0}}>
                   {user.photo ? <img src={user.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : user.avatarEmoji || (user.displayName?.[0]||"U").toUpperCase()}
@@ -2476,6 +2475,7 @@ function AppInner() {
   const [user, setUser] = useState(() => load("su_user", null));
   const [prefs, setPrefs] = useState(() => load("su_prefs", { radius: 25, locLabel: "", locCoords: null }));
   const [showAuth, setShowAuth] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   const evRef = useRef(events);
   useEffect(() => { evRef.current = events; }, [events]);
@@ -2665,7 +2665,8 @@ function AppInner() {
 
   return (
     <div style={{fontFamily:"'DM Sans',sans-serif",minHeight:"100vh",background:pageBg}}>
-      <NavBar page={page} setPage={navPage} count={myCount} user={user} onAuth={()=>setShowAuth(true)} onSignOut={onSignOut} onUpdateProfile={onUpdateProfile} prefs={prefs} mode={mode} onBackToModes={onBackToModes}/>
+      {showProfile && <UserProfilePanel user={user} prefs={prefs} onSave={onUpdateProfile} onClose={()=>setShowProfile(false)} onSignOut={onSignOut}/>}
+      <NavBar page={page} setPage={navPage} count={myCount} user={user} onAuth={()=>setShowAuth(true)} onSignOut={onSignOut} onUpdateProfile={onUpdateProfile} prefs={prefs} mode={mode} onBackToModes={onBackToModes} onOpenProfile={()=>setShowProfile(true)}/>
       {showAuth&&<AuthModal onClose={()=>setShowAuth(false)} onSignIn={u=>{setUser(u);setShowAuth(false);}}/>}
       {selected
         ? <EventDetail
