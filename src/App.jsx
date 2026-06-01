@@ -766,7 +766,15 @@ function AuthModal({ onClose, onSignIn }) {
       const r = await fb.signInWithPopup(fb.auth, fb.google);
       const savedUser = load("su_user", null);
       const preferredName = savedUser?.uid === r.user.uid ? savedUser.displayName : null;
-      onSignIn({uid:r.user.uid, displayName:preferredName||r.user.displayName, email:r.user.email, photo:r.user.photoURL});
+      const hasPreset = savedUser?.uid === r.user.uid && savedUser?.avatarBg;
+      onSignIn({
+        uid: r.user.uid,
+        displayName: preferredName || r.user.displayName,
+        email: r.user.email,
+        photo: hasPreset ? null : r.user.photoURL,
+        avatarBg: hasPreset ? savedUser.avatarBg : null,
+        avatarEmoji: hasPreset ? savedUser.avatarEmoji : null,
+      });
       onClose();
     } catch(e) {
       if(e.code==="auth/popup-blocked") { setErr("Popup blocked -- please allow popups and try again."); }
@@ -788,7 +796,15 @@ function AuthModal({ onClose, onSignIn }) {
       else { r=await fb.signInWithEmailAndPassword(fb.auth,email,pw); }
       const savedUser = load("su_user", null);
       const preferredName = savedUser?.uid === r.user.uid ? savedUser.displayName : null;
-      onSignIn({uid:r.user.uid, displayName:preferredName||r.user.displayName||name.trim()||"Player", email:r.user.email, photo:null});
+      const hasPreset = savedUser?.uid === r.user.uid && savedUser?.avatarBg;
+      onSignIn({
+        uid: r.user.uid,
+        displayName: preferredName || r.user.displayName || name.trim() || "Player",
+        email: r.user.email,
+        photo: hasPreset ? null : null,
+        avatarBg: hasPreset ? savedUser.avatarBg : null,
+        avatarEmoji: hasPreset ? savedUser.avatarEmoji : null,
+      });
       onClose();
     } catch(e) {
       const msg = e.code==="auth/wrong-password"||e.code==="auth/invalid-credential" ? "Incorrect email or password." : e.code==="auth/user-not-found" ? "No account with that email." : e.code==="auth/email-already-in-use" ? "An account with that email already exists." : "Sign in failed. Please try again.";
@@ -2454,7 +2470,11 @@ function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile
               <button onClick={()=>onOpenProfile?onOpenProfile():setShowProfile(true)} title="Profile & preferences"
                 style={{width:30,height:30,borderRadius:"50%",background:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"visible",border:"none",cursor:"pointer",padding:0}}>
                 <div style={{width:30,height:30,borderRadius:"50%",background:user.avatarBg||m.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:user.avatarEmoji?16:11,fontWeight:700,color:"#fff",overflow:"hidden",flexShrink:0}}>
-                  {user.photo ? <img src={user.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : user.avatarEmoji || (user.displayName?.[0]||"U").toUpperCase()}
+                  {user.avatarBg
+                    ? user.avatarEmoji
+                    : user.photo
+                      ? <img src={user.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+                      : (user.displayName?.[0]||"U").toUpperCase()}
                 </div>
               </button>
             </div>
@@ -2624,7 +2644,12 @@ function AppInner() {
 
   const onSignOut       = () => { setUser(null); save("su_user",null); };
   const onUpdateProfile = ({ name, radius, locLabel, locCoords, avatarBg, avatarEmoji }) => {
-    setUser(u => { const updated={...u,displayName:name,avatarBg,avatarEmoji}; save("su_user",updated); return updated; });
+    // avatarChosen means user explicitly picked a preset — clear photo so preset shows
+    setUser(u => {
+      const updated = {...u, displayName:name, avatarBg, avatarEmoji, photo:null};
+      save("su_user", updated);
+      return updated;
+    });
     const p = { radius, locLabel, locCoords }; setPrefs(p); save("su_prefs", p);
     getFirebase().then(fb => {
       if (fb.auth.currentUser) {
@@ -2667,7 +2692,12 @@ function AppInner() {
     <div style={{fontFamily:"'DM Sans',sans-serif",minHeight:"100vh",background:pageBg}}>
       {showProfile && <UserProfilePanel user={user} prefs={prefs} onSave={onUpdateProfile} onClose={()=>setShowProfile(false)} onSignOut={onSignOut}/>}
       <NavBar page={page} setPage={navPage} count={myCount} user={user} onAuth={()=>setShowAuth(true)} onSignOut={onSignOut} onUpdateProfile={onUpdateProfile} prefs={prefs} mode={mode} onBackToModes={onBackToModes} onOpenProfile={()=>setShowProfile(true)}/>
-      {showAuth&&<AuthModal onClose={()=>setShowAuth(false)} onSignIn={u=>{setUser(u);setShowAuth(false);}}/>}
+      {showAuth&&<AuthModal onClose={()=>setShowAuth(false)} onSignIn={u=>{
+        const saved=load("su_user",null);
+        const hasPreset=saved?.uid===u?.uid&&saved?.avatarBg;
+        setUser({...u, photo:hasPreset?null:u.photo, avatarBg:hasPreset?saved.avatarBg:u.avatarBg, avatarEmoji:hasPreset?saved.avatarEmoji:u.avatarEmoji});
+        setShowAuth(false);
+      }}/>}
       {selected
         ? <EventDetail
             event={events.find(e=>e.id===selected.id)||selected}
