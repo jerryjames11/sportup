@@ -1124,6 +1124,70 @@ function EditEventModal({ event, onSave, onClose }) {
 }
 
 //
+// ─── Share with friends ───────────────────────────────────────────────────────
+function ShareWithFriends({ event, currentUser }) {
+  const [friends, setFriends] = useState([]);
+  const [sent, setSent] = useState({});
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open || !currentUser?.uid) return;
+    getFirebase().then(fb => {
+      fb.getDocs(fb.collection(fb.db,"users",currentUser.uid,"friends")).then(snap => {
+        setFriends(snap.docs.map(d=>({id:d.id,...d.data()})).filter(f=>f.status==="accepted"));
+      });
+    }).catch(()=>{});
+  }, [open, currentUser?.uid]);
+
+  const shareWithFriend = async (f) => {
+    const friendUid = f.id;
+    const friendName = f.fromName===currentUser.displayName ? f.toName : f.fromName;
+    try {
+      const fb = await getFirebase();
+      const shareLink = `${window.location.origin}${window.location.pathname}#event=${event.id}`;
+      await fb.addDoc(fb.collection(fb.db,"users",friendUid,"notifications"), {
+        type:"event_share", fromUid:currentUser.uid, fromName:currentUser.displayName||"Someone",
+        eventId:event.id, eventTitle:event.title, shareLink,
+        message:`${currentUser.displayName||"Someone"} shared an event with you: "${event.title}"`,
+        ts:Date.now(), read:false
+      });
+      setSent(s=>({...s,[friendUid]:true}));
+    } catch(e) { console.error("Share failed:", e); }
+  };
+
+  if (!open) return (
+    <button onClick={()=>setOpen(true)} style={{width:"100%",padding:"9px 14px",borderRadius:10,border:"1.5px solid #ddd",background:"#fafafa",color:"#555",fontWeight:600,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+      👥 Share with a friend
+    </button>
+  );
+
+  return (
+    <div style={{background:"#F7F7F5",border:"1.5px solid #eee",borderRadius:12,padding:"12px 14px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={{fontSize:12,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5}}>Share with friends</div>
+        <button onClick={()=>setOpen(false)} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:16,padding:0}}>✕</button>
+      </div>
+      {friends.length===0
+        ? <div style={{fontSize:13,color:"#aaa",textAlign:"center",padding:"12px 0"}}>No friends yet -- add friends from your profile panel.</div>
+        : friends.map(f=>{
+            const friendUid = f.id;
+            const friendName = f.fromName===currentUser.displayName ? f.toName : f.fromName;
+            return (
+              <div key={friendUid} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:"#F4530D",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>{friendName?.[0]?.toUpperCase()||"?"}</div>
+                <div style={{flex:1,fontSize:13,fontWeight:600,color:"#111"}}>{friendName}</div>
+                <button onClick={()=>shareWithFriend(f)} disabled={sent[friendUid]}
+                  style={{padding:"6px 12px",borderRadius:8,border:"none",background:sent[friendUid]?"#2B8A3E":"#111",color:"#fff",fontSize:12,fontWeight:700,cursor:sent[friendUid]?"default":"pointer",flexShrink:0}}>
+                  {sent[friendUid]?"Sent":"Share"}
+                </button>
+              </div>
+            );
+          })
+      }
+    </div>
+  );
+}
+
 function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSlots, onUpdateDeadline, onUpdatePlayers, onUpdateEvent, onBack, onAuthRequired }) {
   const s = ALL_SPORT_MAP[event.sport] || { label:event.sport||"Event", color:"#888", bg:"#eee", emoji:"🏅" };
   const pt = event.participantType || (event.type==="tournament"?"teams":"players");
@@ -1253,6 +1317,9 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
 
               {/* Join button — above share link */}
               {spotsLeft>0&&!isIn&&!isHost&&!pastDL&&<button onClick={()=>{if(!currentUser){onAuthRequired();return;}setShowJoin(true);}} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:s.color,color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",boxShadow:`0 4px 20px ${s.color}55`}}>{event.type==="tournament"?`Register ${ptSingular} →`:"Join game →"}</button>}
+
+              {/* Share with friends */}
+              {currentUser && <ShareWithFriends event={event} currentUser={currentUser}/>}
 
               {/* Share + Privacy */}
               <div style={{background:"#F7F7F5",border:"1.5px solid #eee",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
@@ -1960,14 +2027,116 @@ function distanceMiles(lat1, lng1, lat2, lng2) {
 }
 
 //
+// ─── Avatar presets ───────────────────────────────────────────────────────────
+const AVATAR_PRESETS = [
+  {bg:"#F4530D",emoji:"⚡"},{bg:"#1560BD",emoji:"🏆"},{bg:"#2B8A3E",emoji:"🌿"},
+  {bg:"#7B2FBE",emoji:"🔮"},{bg:"#C92A2A",emoji:"🔥"},{bg:"#856404",emoji:"⭐"},
+  {bg:"#1971C2",emoji:"🌊"},{bg:"#5C3BC0",emoji:"🎯"},{bg:"#2B8A3E",emoji:"⚽"},
+  {bg:"#E8590C",emoji:"🏀"},{bg:"#1560BD",emoji:"🏐"},{bg:"#9C36B5",emoji:"🏈"},
+  {bg:"#C92A2A",emoji:"🏓"},{bg:"#111",emoji:"😎"},{bg:"#555",emoji:"🤝"},
+  {bg:"#0D2A5E",emoji:"🧊"},
+];
+
+function AvatarDisplay({ user, size=30, fontSize=12 }) {
+  if (user?.photo) return <img src={user.photo} style={{width:size,height:size,borderRadius:"50%",objectFit:"cover"}} alt=""/>;
+  if (user?.avatarBg) return (
+    <div style={{width:size,height:size,borderRadius:"50%",background:user.avatarBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.45,flexShrink:0}}>
+      {user.avatarEmoji||"😎"}
+    </div>
+  );
+  const bg = "#F4530D";
+  return (
+    <div style={{width:size,height:size,borderRadius:"50%",background:bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize,fontWeight:700,color:"#fff",flexShrink:0}}>
+      {(user?.displayName?.[0]||"U").toUpperCase()}
+    </div>
+  );
+}
+
 function UserProfilePanel({ user, prefs, onSave, onClose, onSignOut }) {
+  const [tab, setTab] = useState("profile");
   const [name, setName] = useState(() => user?.displayName || "");
   const [radius, setRadius] = useState(() => prefs?.radius || 25);
   const [locLabel, setLocLabel] = useState(() => prefs?.locLabel || "");
   const [locCoords, setLocCoords] = useState(() => prefs?.locCoords || null);
   const [locLoading, setLocLoading] = useState(false);
   const [locResults, setLocResults] = useState([]);
+  const [avatarBg, setAvatarBg] = useState(() => user?.avatarBg || "#F4530D");
+  const [avatarEmoji, setAvatarEmoji] = useState(() => user?.avatarEmoji || "⚡");
+  const [avatarOpen, setAvatarOpen] = useState(false);
+
+  // Friends state
+  const [friends, setFriends] = useState([]);
+  const [friendReqs, setFriendReqs] = useState([]);
+  const [friendEmail, setFriendEmail] = useState("");
+  const [friendSearch, setFriendSearch] = useState(null);
+  const [friendLoading, setFriendLoading] = useState(false);
+  const [friendMsg, setFriendMsg] = useState("");
+
   const locTimer = useRef(null);
+
+  // Load friends from Firestore
+  useEffect(() => {
+    if (!user || tab !== "friends") return;
+    getFirebase().then(fb => {
+      const col = fb.collection(fb.db, "users", user.uid, "friends");
+      return fb.onSnapshot(col, snap => {
+        const all = snap.docs.map(d => ({id:d.id,...d.data()}));
+        setFriends(all.filter(f => f.status==="accepted"));
+        setFriendReqs(all.filter(f => f.status==="pending" && f.to===user.uid));
+      });
+    }).catch(()=>{});
+  }, [user, tab]);
+
+  const searchFriendByEmail = async () => {
+    if (!friendEmail.trim()) return;
+    setFriendLoading(true); setFriendSearch(null); setFriendMsg("");
+    try {
+      const fb = await getFirebase();
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,"users"), fb.where("email","==",friendEmail.trim().toLowerCase())));
+      if (snap.empty) { setFriendMsg("No user found with that email."); }
+      else {
+        const found = {id:snap.docs[0].id,...snap.docs[0].data()};
+        if (found.id === user.uid) { setFriendMsg("That's you!"); }
+        else { setFriendSearch(found); }
+      }
+    } catch(e) { setFriendMsg("Search failed. Try again."); }
+    setFriendLoading(false);
+  };
+
+  const sendFriendRequest = async (toUser) => {
+    try {
+      const fb = await getFirebase();
+      const reqData = { from:user.uid, fromName:user.displayName, to:toUser.id, toName:toUser.displayName, status:"pending", ts:Date.now() };
+      await fb.setDoc(fb.doc(fb.db,"users",user.uid,"friends",toUser.id), reqData);
+      await fb.setDoc(fb.doc(fb.db,"users",toUser.id,"friends",user.uid), reqData);
+      // Send notification
+      await fb.addDoc(fb.collection(fb.db,"users",toUser.id,"notifications"), {
+        type:"friend_request", fromUid:user.uid, fromName:user.displayName||"Someone",
+        message:`${user.displayName||"Someone"} sent you a friend request!`, ts:Date.now(), read:false
+      });
+      setFriendMsg("Friend request sent!"); setFriendSearch(null); setFriendEmail("");
+    } catch(e) { setFriendMsg("Failed to send request."); }
+  };
+
+  const acceptFriendRequest = async (req) => {
+    try {
+      const fb = await getFirebase();
+      await fb.updateDoc(fb.doc(fb.db,"users",user.uid,"friends",req.from), {status:"accepted"});
+      await fb.updateDoc(fb.doc(fb.db,"users",req.from,"friends",user.uid), {status:"accepted"});
+      await fb.addDoc(fb.collection(fb.db,"users",req.from,"notifications"), {
+        type:"friend_accepted", fromUid:user.uid, fromName:user.displayName||"Someone",
+        message:`${user.displayName||"Someone"} accepted your friend request!`, ts:Date.now(), read:false
+      });
+    } catch(e) {}
+  };
+
+  const removeFriend = async (friendUid) => {
+    try {
+      const fb = await getFirebase();
+      await fb.deleteDoc(fb.doc(fb.db,"users",user.uid,"friends",friendUid));
+      await fb.deleteDoc(fb.doc(fb.db,"users",friendUid,"friends",user.uid));
+    } catch(e) {}
+  };
 
   const searchLoc = async (q) => {
     if (q.length < 3) { setLocResults([]); return; }
@@ -2001,82 +2170,177 @@ function UserProfilePanel({ user, prefs, onSave, onClose, onSignOut }) {
         setLocLabel(label); setLocCoords({ lat, lng });
       } catch { setLocLabel("Current location"); setLocCoords({ lat, lng }); }
       setLocLoading(false);
-    }, () => { alert("Could not get your location. Please allow location access or search manually."); setLocLoading(false); });
+    }, () => { alert("Could not get your location."); setLocLoading(false); });
   };
 
   const save = () => {
     if (!name.trim()) { alert("Name can't be empty"); return; }
-    onSave({ name: name.trim(), radius, locLabel, locCoords });
+    onSave({ name: name.trim(), radius, locLabel, locCoords, avatarBg, avatarEmoji });
     onClose();
   };
+
+  // Save user profile to Firestore users collection for friend discovery
+  useEffect(() => {
+    if (!user?.uid || !user?.email) return;
+    getFirebase().then(fb => {
+      fb.setDoc(fb.doc(fb.db,"users",user.uid), {
+        uid: user.uid, displayName: user.displayName||"", email: user.email||"", updatedAt: Date.now()
+      }, {merge:true}).catch(()=>{});
+    }).catch(()=>{});
+  }, [user]);
 
   const inp = { width:"100%", padding:"10px 14px", borderRadius:10, border:"1.5px solid rgba(255,255,255,.2)", background:"rgba(255,255,255,.1)", color:"#fff", fontSize:14, outline:"none", fontFamily:"inherit", boxSizing:"border-box" };
   const lbl = { fontSize:11, fontWeight:700, color:"rgba(255,255,255,.45)", textTransform:"uppercase", letterSpacing:.6, display:"block", marginBottom:8 };
 
   return (
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.65)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"flex-end"}} onClick={onClose}>
-      {/* Slide-in panel from right */}
-      <div style={{background:"#12121C",borderLeft:"1px solid rgba(255,255,255,.1)",width:"min(340px, 100vw)",height:"100%",overflowY:"auto",padding:"28px 22px",display:"flex",flexDirection:"column",gap:24}} onClick={e=>e.stopPropagation()}>
+      <div style={{background:"#12121C",borderLeft:"1px solid rgba(255,255,255,.1)",width:"min(360px, 100vw)",height:"100%",overflowY:"auto",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{padding:"24px 22px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:20,color:"#fff",letterSpacing:-.5}}>My Profile</div>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,.4)",fontSize:22,cursor:"pointer",padding:0,lineHeight:1}}>✕</button>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,.4)",fontSize:22,cursor:"pointer",padding:0}}>✕</button>
         </div>
 
-        {/* Display name */}
-        <div>
-          <label style={lbl}>Display name</label>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Your public name" style={inp}/>
-          <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginTop:6}}>This is what other players and hosts see.</div>
+        {/* Tabs */}
+        <div style={{display:"flex",borderBottom:"1px solid rgba(255,255,255,.1)",margin:"16px 0 0",padding:"0 22px"}}>
+          {["profile","friends"].map(t=>(
+            <button key={t} onClick={()=>setTab(t)} style={{padding:"8px 16px 10px",border:"none",background:"transparent",color:tab===t?"#fff":"rgba(255,255,255,.4)",fontWeight:tab===t?700:500,fontSize:13,cursor:"pointer",borderBottom:tab===t?"2px solid #F4530D":"2px solid transparent",fontFamily:"'DM Sans',sans-serif",textTransform:"capitalize"}}>
+              {t==="profile"?"👤 Profile":"👥 Friends"}
+            </button>
+          ))}
         </div>
 
-        {/* Location */}
-        <div>
-          <label style={lbl}>Your location</label>
-          <div style={{position:"relative"}}>
-            <input value={locLabel} onChange={e=>onLocType(e.target.value)} placeholder="City, zip, or neighborhood..." style={inp} onBlur={()=>setTimeout(()=>setLocResults([]),200)}/>
-            {locResults.length > 0 && (
-              <div style={{position:"absolute",zIndex:10,top:"100%",left:0,right:0,background:"#1e1e2e",border:"1px solid rgba(255,255,255,.15)",borderRadius:10,marginTop:4,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,.4)"}}>
-                {locResults.map((r,i) => (
-                  <div key={i} onMouseDown={()=>pickLoc(r)}
-                    style={{padding:"10px 14px",cursor:"pointer",fontSize:13,color:"rgba(255,255,255,.8)",borderBottom:i<locResults.length-1?"1px solid rgba(255,255,255,.07)":"none"}}
-                    onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.08)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    📍 {r.display_name.split(",").slice(0,3).join(", ")}
+        <div style={{flex:1,padding:"20px 22px",display:"flex",flexDirection:"column",gap:20,overflowY:"auto"}}>
+
+          {tab==="profile" && <>
+            {/* Avatar picker — collapsible */}
+            <div>
+              <button onClick={()=>setAvatarOpen(o=>!o)}
+                style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"none",border:"none",cursor:"pointer",padding:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <AvatarDisplay user={{...user,avatarBg,avatarEmoji}} size={34} fontSize={16}/>
+                  <span style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,.7)",fontFamily:"'DM Sans',sans-serif"}}>Change profile picture</span>
+                </div>
+                <span style={{color:"rgba(255,255,255,.4)",fontSize:16,transition:"transform .2s",display:"inline-block",transform:avatarOpen?"rotate(180deg)":"rotate(0deg)"}}>▾</span>
+              </button>
+              {avatarOpen && (
+                <div style={{marginTop:14}}>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:10,marginBottom:12}}>
+                    {AVATAR_PRESETS.map((p,i)=>(
+                      <button key={i} onClick={()=>{setAvatarBg(p.bg);setAvatarEmoji(p.emoji);}}
+                        style={{width:44,height:44,borderRadius:"50%",background:p.bg,border:avatarBg===p.bg&&avatarEmoji===p.emoji?"3px solid #fff":"3px solid transparent",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform .15s",transform:avatarBg===p.bg&&avatarEmoji===p.emoji?"scale(1.15)":"scale(1)"}}>
+                        {p.emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Display name */}
+            <div>
+              <label style={lbl}>Display name</label>
+              <input value={name} onChange={e=>setName(e.target.value)} placeholder="Your public name" style={inp}/>
+              <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginTop:6}}>Shown to other players and hosts.</div>
+            </div>
+
+            {/* Location */}
+            <div>
+              <label style={lbl}>Your location</label>
+              <div style={{position:"relative"}}>
+                <input value={locLabel} onChange={e=>onLocType(e.target.value)} placeholder="City, zip, or neighborhood…" style={inp} onBlur={()=>setTimeout(()=>setLocResults([]),200)}/>
+                {locResults.length > 0 && (
+                  <div style={{position:"absolute",zIndex:10,top:"100%",left:0,right:0,background:"#1e1e2e",border:"1px solid rgba(255,255,255,.15)",borderRadius:10,marginTop:4,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,.4)"}}>
+                    {locResults.map((r,i) => (
+                      <div key={i} onMouseDown={()=>pickLoc(r)}
+                        style={{padding:"10px 14px",cursor:"pointer",fontSize:13,color:"rgba(255,255,255,.8)",borderBottom:i<locResults.length-1?"1px solid rgba(255,255,255,.07)":"none"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.08)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        📍 {r.display_name.split(",").slice(0,3).join(", ")}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={useCurrentLoc} disabled={locLoading}
+                style={{marginTop:10,width:"100%",padding:"10px",borderRadius:10,border:"1.5px solid rgba(255,255,255,.15)",background:"rgba(255,255,255,.06)",color:locLoading?"rgba(255,255,255,.3)":"rgba(255,255,255,.7)",fontSize:13,fontWeight:600,cursor:locLoading?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                {locLoading ? "📍 Getting location…" : "📍 Use my current location"}
+              </button>
+            </div>
+
+            {/* Distance slider */}
+            <div>
+              <label style={lbl}>Search radius</label>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <span style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Within</span>
+                <span style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:22,color:"#fff"}}>{radius} <span style={{fontSize:14,fontWeight:400,color:"rgba(255,255,255,.5)"}}>miles</span></span>
+              </div>
+              <input type="range" min={5} max={100} step={5} value={radius} onChange={e=>setRadius(Number(e.target.value))} style={{width:"100%",accentColor:"#F4530D",cursor:"pointer"}}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"rgba(255,255,255,.25)",marginTop:4}}>
+                <span>5 mi</span><span>100 mi</span>
+              </div>
+            </div>
+
+            <button onClick={save} style={{padding:"13px",borderRadius:12,border:"none",background:"#F4530D",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",boxShadow:"0 4px 20px rgba(244,83,13,.4)"}}>Save preferences</button>
+          </>}
+
+          {tab==="friends" && <>
+            {/* Pending requests */}
+            {friendReqs.length > 0 && (
+              <div>
+                <label style={lbl}>Friend requests ({friendReqs.length})</label>
+                {friendReqs.map(req=>(
+                  <div key={req.from} style={{display:"flex",alignItems:"center",gap:10,background:"rgba(255,255,255,.06)",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+                    <div style={{width:36,height:36,borderRadius:"50%",background:"#F4530D",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,color:"#fff",flexShrink:0}}>{req.fromName?.[0]?.toUpperCase()||"?"}</div>
+                    <div style={{flex:1,fontSize:13,fontWeight:600,color:"#fff"}}>{req.fromName}</div>
+                    <button onClick={()=>acceptFriendRequest(req)} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#2B8A3E",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Accept</button>
+                    <button onClick={()=>removeFriend(req.from)} style={{padding:"6px 10px",borderRadius:8,border:"1px solid rgba(255,255,255,.2)",background:"transparent",color:"rgba(255,255,255,.5)",fontSize:12,cursor:"pointer"}}>Decline</button>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-          <button onClick={useCurrentLoc} disabled={locLoading}
-            style={{marginTop:10,width:"100%",padding:"10px",borderRadius:10,border:"1.5px solid rgba(255,255,255,.15)",background:"rgba(255,255,255,.06)",color:locLoading?"rgba(255,255,255,.3)":"rgba(255,255,255,.7)",fontSize:13,fontWeight:600,cursor:locLoading?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-            {locLoading ? "📍 Getting location..." : "📍 Use my current location"}
-          </button>
-          {locCoords && <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginTop:6}}>✓ Location set: {locLabel}</div>}
+
+            {/* Find by email */}
+            <div>
+              <label style={lbl}>Add friend by email</label>
+              <div style={{display:"flex",gap:8}}>
+                <input value={friendEmail} onChange={e=>setFriendEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&searchFriendByEmail()} placeholder="friend@email.com" style={{...inp,flex:1}}/>
+                <button onClick={searchFriendByEmail} disabled={friendLoading} style={{padding:"10px 14px",borderRadius:10,border:"none",background:"#F4530D",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",flexShrink:0}}>Find</button>
+              </div>
+              {friendMsg && <div style={{fontSize:12,color:"rgba(255,255,255,.5)",marginTop:8}}>{friendMsg}</div>}
+              {friendSearch && (
+                <div style={{display:"flex",alignItems:"center",gap:10,background:"rgba(255,255,255,.08)",borderRadius:12,padding:"12px 14px",marginTop:10}}>
+                  <div style={{width:36,height:36,borderRadius:"50%",background:"#1560BD",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,color:"#fff",flexShrink:0}}>{friendSearch.displayName?.[0]?.toUpperCase()||"?"}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{friendSearch.displayName}</div>
+                    <div style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>{friendSearch.email}</div>
+                  </div>
+                  <button onClick={()=>sendFriendRequest(friendSearch)} style={{padding:"7px 14px",borderRadius:8,border:"none",background:"#F4530D",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Add</button>
+                </div>
+              )}
+            </div>
+
+            {/* Friends list */}
+            <div>
+              <label style={lbl}>My friends ({friends.length})</label>
+              {friends.length===0
+                ? <div style={{fontSize:13,color:"rgba(255,255,255,.3)",textAlign:"center",padding:"20px 0"}}>No friends yet — search by email above or meet people at events!</div>
+                : friends.map(f=>(
+                  <div key={f.id} style={{display:"flex",alignItems:"center",gap:10,background:"rgba(255,255,255,.06)",borderRadius:12,padding:"11px 14px",marginBottom:8}}>
+                    <div style={{width:34,height:34,borderRadius:"50%",background:"#F4530D",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",flexShrink:0}}>{(f.fromName===user.displayName?f.toName:f.fromName)?.[0]?.toUpperCase()||"?"}</div>
+                    <div style={{flex:1,fontSize:13,fontWeight:600,color:"#fff"}}>{f.fromName===user.displayName?f.toName:f.fromName}</div>
+                    <button onClick={()=>removeFriend(f.id)} style={{fontSize:11,color:"rgba(255,255,255,.3)",background:"none",border:"none",cursor:"pointer"}}>Remove</button>
+                  </div>
+                ))
+              }
+            </div>
+          </>}
         </div>
 
-        {/* Distance slider */}
-        <div>
-          <label style={lbl}>Search radius</label>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <span style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Within</span>
-            <span style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:22,color:"#fff"}}>{radius} <span style={{fontSize:14,fontWeight:400,color:"rgba(255,255,255,.5)"}}>miles</span></span>
-          </div>
-          <input type="range" min={5} max={100} step={5} value={radius} onChange={e=>setRadius(Number(e.target.value))}
-            style={{width:"100%",accentColor:"#F4530D",cursor:"pointer"}}/>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"rgba(255,255,255,.25)",marginTop:4}}>
-            <span>5 mi</span><span>100 mi</span>
-          </div>
-          {!locCoords && <div style={{fontSize:11,color:"rgba(255,255,255,.25)",marginTop:8}}>Set a location above to filter events by distance.</div>}
-        </div>
-
-        {/* Save */}
-        <button onClick={save} style={{padding:"13px",borderRadius:12,border:"none",background:"#F4530D",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",boxShadow:"0 4px 20px rgba(244,83,13,.4)"}}>Save preferences</button>
-
-        {/* Sign out at bottom */}
-        <div style={{borderTop:"1px solid rgba(255,255,255,.08)",paddingTop:20,marginTop:"auto"}}>
-          <div style={{fontSize:12,color:"rgba(255,255,255,.3)",marginBottom:12}}>{user?.email}</div>
-          <button onClick={()=>{onClose();onSignOut();}} style={{width:"100%",padding:"10px",borderRadius:10,border:"1.5px solid rgba(255,255,255,.12)",background:"transparent",color:"rgba(255,255,255,.6)",fontWeight:600,fontSize:14,cursor:"pointer",marginBottom:12}}>Sign out</button>
+        {/* Footer */}
+        <div style={{borderTop:"1px solid rgba(255,255,255,.08)",padding:"16px 22px"}}>
+          <div style={{fontSize:12,color:"rgba(255,255,255,.3)",marginBottom:10}}>{user?.email}</div>
+          <button onClick={()=>{onClose();onSignOut();}} style={{width:"100%",padding:"10px",borderRadius:10,border:"1.5px solid rgba(255,255,255,.12)",background:"transparent",color:"rgba(255,255,255,.6)",fontWeight:600,fontSize:14,cursor:"pointer",marginBottom:10}}>Sign out</button>
           <a href="/privacy" target="_blank" style={{fontSize:11,color:"rgba(255,255,255,.25)",textDecoration:"underline"}}>Privacy Policy</a>
         </div>
       </div>
@@ -2117,10 +2381,54 @@ const TabIcon = ({ id, size=16 }) => {
 function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile, prefs, mode, onBackToModes }) {
   const m = MODES[mode] || MODES.pickup;
   const [showProfile, setShowProfile] = useState(false);
+  const [notifs, setNotifs] = useState([]);
+  const [showNotifs, setShowNotifs] = useState(false);
   const tabs = [{id:"home",label:"Browse"},{id:"create",label:"Create"},{id:"my",label:"My Events"}];
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    let unsub;
+    getFirebase().then(fb => {
+      const col = fb.collection(fb.db, "users", user.uid, "notifications");
+      unsub = fb.onSnapshot(col, snap => {
+        setNotifs(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.ts-a.ts));
+      });
+    }).catch(()=>{});
+    return () => unsub && unsub();
+  }, [user?.uid]);
+
+  const unread = notifs.filter(n=>!n.read).length;
+
+  const markRead = async (notifId) => {
+    if (!user?.uid) return;
+    try {
+      const fb = await getFirebase();
+      await fb.updateDoc(fb.doc(fb.db,"users",user.uid,"notifications",notifId),{read:true});
+    } catch(e) {}
+  };
+
   return (
     <>
       {showProfile && <UserProfilePanel user={user} prefs={prefs} onSave={onUpdateProfile} onClose={()=>setShowProfile(false)} onSignOut={onSignOut}/>}
+      {showNotifs && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9998}} onClick={()=>setShowNotifs(false)}>
+          <div style={{position:"absolute",top:58,right:10,width:300,maxWidth:"90vw",background:"#1a1a2e",border:"1px solid rgba(255,255,255,.15)",borderRadius:14,overflow:"hidden",boxShadow:"0 8px 32px rgba(0,0,0,.5)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,.1)",fontWeight:700,fontSize:14,color:"#fff"}}>Notifications</div>
+            {notifs.length===0
+              ? <div style={{padding:"20px 16px",fontSize:13,color:"rgba(255,255,255,.4)",textAlign:"center"}}>No notifications yet</div>
+              : notifs.slice(0,10).map(n=>(
+                <div key={n.id} onClick={()=>markRead(n.id)}
+                  style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,.07)",background:n.read?"transparent":"rgba(244,83,13,.08)",cursor:"pointer"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.05)"}
+                  onMouseLeave={e=>e.currentTarget.style.background=n.read?"transparent":"rgba(244,83,13,.08)"}>
+                  <div style={{fontSize:13,color:"#fff",fontWeight:n.read?400:600}}>{n.message}</div>
+                  <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginTop:3}}>{new Date(n.ts).toLocaleDateString()}</div>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      )}
       <nav style={{position:"sticky",top:0,zIndex:100,background:"rgba(10,10,15,.96)",backdropFilter:"blur(12px)",borderBottom:("1px solid "+m.accent+"33"),display:"flex",alignItems:"center",padding:"0 10px",height:56,gap:4}}>
         <button onClick={onBackToModes} title="Switch mode" style={{background:"none",border:"none",color:"rgba(255,255,255,.5)",fontSize:44,cursor:"pointer",padding:"0 4px 0 0",lineHeight:1,display:"flex",alignItems:"center",flexShrink:0,position:"relative",top:-2}}>‹</button>
         <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:22,color:"#fff",marginRight:"auto",letterSpacing:-.5,whiteSpace:"nowrap",flexShrink:0}}>
@@ -2139,10 +2447,14 @@ function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile
           ))}
         </div>
         {user
-          ? <div style={{display:"flex",alignItems:"center",marginLeft:4,flexShrink:0}}>
+          ? <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:4,flexShrink:0}}>
+              <button onClick={()=>setShowNotifs(s=>!s)} style={{position:"relative",background:"none",border:"none",color:"rgba(255,255,255,.5)",fontSize:16,cursor:"pointer",padding:"4px",display:"flex",alignItems:"center"}}>
+                🔔
+                {unread>0&&<span style={{position:"absolute",top:0,right:0,background:"#C92A2A",color:"#fff",borderRadius:99,fontSize:9,padding:"1px 4px",fontWeight:800,minWidth:14,textAlign:"center"}}>{unread}</span>}
+              </button>
               <button onClick={()=>setShowProfile(true)} title="Profile & preferences"
-                style={{width:30,height:30,borderRadius:"50%",background:m.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#fff",flexShrink:0,overflow:"hidden",border:"none",cursor:"pointer",padding:0}}>
-                {user.photo?<img src={user.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:(user.displayName?.[0]||"U").toUpperCase()}
+                style={{width:30,height:30,borderRadius:"50%",background:user.avatarBg||m.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0,overflow:"hidden",border:"none",cursor:"pointer",padding:0}}>
+                <AvatarDisplay user={user} size={30} fontSize={11}/>
               </button>
             </div>
           : <button onClick={onAuth} style={{padding:"6px 11px",borderRadius:8,border:("1.5px solid "+m.accent),background:m.accent,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,marginLeft:4}}>Sign in</button>}
@@ -2304,10 +2616,9 @@ function AppInner() {
   }, [fsUpdate]);
 
   const onSignOut       = () => { setUser(null); save("su_user",null); };
-  const onUpdateProfile = ({ name, radius, locLabel, locCoords }) => {
-    setUser(u => { const updated={...u,displayName:name}; save("su_user",updated); return updated; });
+  const onUpdateProfile = ({ name, radius, locLabel, locCoords, avatarBg, avatarEmoji }) => {
+    setUser(u => { const updated={...u,displayName:name,avatarBg,avatarEmoji}; save("su_user",updated); return updated; });
     const p = { radius, locLabel, locCoords }; setPrefs(p); save("su_prefs", p);
-    // Also update Firebase Auth profile so name persists on next sign-in
     getFirebase().then(fb => {
       if (fb.auth.currentUser) {
         fb.updateProfile(fb.auth.currentUser, { displayName: name }).catch(e => console.warn("Profile update failed:", e));
