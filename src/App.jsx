@@ -638,7 +638,7 @@ function SeedingModal({ teams, onConfirm, onClose }) {
   if (lo === hi) previewMatchups.push({ a: activeTeams[lo], b: { name:"BYE", seed:999 }, isBye: true });
 
   return (
-    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
       <div style={{background:"#fff",borderRadius:20,padding:"26px 24px",width:500,maxWidth:"96vw",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,.2)"}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
           <div><div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:20,color:"#111",letterSpacing:-.5}}>🎯 Set Seeding</div>
@@ -881,7 +881,7 @@ function JoinModal({ event, currentUser, onConfirm, onClose }) {
   };
   const inp = {padding:"10px 13px",borderRadius:10,border:"1.5px solid #ddd",fontSize:14,outline:"none",fontFamily:"inherit"};
   return (
-    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.45)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
+    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.45)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
       <div style={{background:"#fff",borderRadius:18,padding:"26px 24px",width:360,maxWidth:"92vw",boxShadow:"0 20px 60px rgba(0,0,0,.18)"}} onClick={e=>e.stopPropagation()}>
         <div style={{fontWeight:800,fontSize:18,color:"#111",marginBottom:4,fontFamily:"'DM Sans',sans-serif"}}>{isTmnt?(pt==="teams"?"🏅 Register your team":"👤 Register as player"):"🎮 Join this game"}</div>
         <p style={{fontSize:13,color:"#888",margin:"0 0 18px"}}>Contact info is only visible to the host.</p>
@@ -917,7 +917,7 @@ function HostAddModal({ event, onConfirm, onClose }) {
   };
   const inp={padding:"10px 13px",borderRadius:10,border:"1.5px solid #ddd",fontSize:14,outline:"none",fontFamily:"inherit"};
   return (
-    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.45)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
+    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.45)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
       <div style={{background:"#fff",borderRadius:18,padding:"26px 24px",width:360,maxWidth:"92vw",boxShadow:"0 20px 60px rgba(0,0,0,.18)"}} onClick={e=>e.stopPropagation()}>
         <div style={{fontWeight:800,fontSize:18,color:"#111",marginBottom:4,fontFamily:"'DM Sans',sans-serif"}}>✏️ Add {lbl}</div>
         <p style={{fontSize:13,color:"#888",margin:"0 0 18px"}}>Manually register on their behalf.</p>
@@ -1084,7 +1084,7 @@ function EditEventModal({ event, onSave, onClose }) {
   };
 
   return (
-    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.55)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.55)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
       <div style={{background:"#fff",borderRadius:20,padding:"26px 24px",width:480,maxWidth:"96vw",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}} onClick={e=>e.stopPropagation()}>
         <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:20,color:"#111",marginBottom:20,letterSpacing:-.5}}>✏️ Edit event</div>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -1253,7 +1253,7 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
 
       {/* Inline remove/leave confirm modal */}
       {confirmRemove&&(
-        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.45)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setConfirmRemove(null)}>
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.45)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setConfirmRemove(null)}>
           <div style={{background:"#fff",borderRadius:16,padding:"24px 22px",width:320,maxWidth:"92vw",boxShadow:"0 20px 60px rgba(0,0,0,.2)"}} onClick={e=>e.stopPropagation()}>
             <div style={{fontWeight:800,fontSize:17,color:"#111",marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>
               {confirmRemove.isSelf?"Leave this event?":"Remove participant?"}
@@ -1275,7 +1275,7 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
 
       {/* Cancel event confirm modal */}
       {showCancel&&(
-        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.45)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowCancel(false)}>
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.45)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowCancel(false)}>
           <div style={{background:"#fff",borderRadius:16,padding:"24px 22px",width:340,maxWidth:"92vw",boxShadow:"0 20px 60px rgba(0,0,0,.2)"}} onClick={e=>e.stopPropagation()}>
             <div style={{fontWeight:800,fontSize:17,color:"#111",marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>Cancel this event?</div>
             <p style={{fontSize:13,color:"#666",margin:"0 0 18px"}}>This will permanently remove <strong>{event.title}</strong> and cannot be undone. All registered participants will lose their spots.</p>
@@ -2453,8 +2453,10 @@ function NavBar({ page, setPage, count, user, onAuth, onSignOut, onUpdateProfile
                 {unread>0&&<span style={{position:"absolute",top:0,right:0,background:"#C92A2A",color:"#fff",borderRadius:99,fontSize:9,padding:"1px 4px",fontWeight:800,minWidth:14,textAlign:"center"}}>{unread}</span>}
               </button>
               <button onClick={()=>setShowProfile(true)} title="Profile & preferences"
-                style={{width:30,height:30,borderRadius:"50%",background:user.avatarBg||m.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0,overflow:"hidden",border:"none",cursor:"pointer",padding:0}}>
-                <AvatarDisplay user={user} size={30} fontSize={11}/>
+                style={{width:30,height:30,borderRadius:"50%",background:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"visible",border:"none",cursor:"pointer",padding:0}}>
+                <div style={{width:30,height:30,borderRadius:"50%",background:user.avatarBg||m.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:user.avatarEmoji?16:11,fontWeight:700,color:"#fff",overflow:"hidden",flexShrink:0}}>
+                  {user.photo ? <img src={user.photo} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : user.avatarEmoji || (user.displayName?.[0]||"U").toUpperCase()}
+                </div>
               </button>
             </div>
           : <button onClick={onAuth} style={{padding:"6px 11px",borderRadius:8,border:("1.5px solid "+m.accent),background:m.accent,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,marginLeft:4}}>Sign in</button>}
@@ -2539,6 +2541,11 @@ function AppInner() {
         .mode-card-title { font-size: 20px !important; }
         .mode-card-tagline { font-size: 11px !important; margin-bottom: 16px !important; }
       }
+      /* Cap Leaflet map z-index so modals always appear on top */
+      .leaflet-pane { z-index: 400 !important; }
+      .leaflet-top, .leaflet-bottom { z-index: 500 !important; }
+      .leaflet-control { z-index: 500 !important; }
+      .leaflet-popup-pane { z-index: 600 !important; }
     `;
     document.head.appendChild(style);
   }, []);
