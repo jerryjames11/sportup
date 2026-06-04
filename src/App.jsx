@@ -480,75 +480,199 @@ function SingleBracket({ teams, byeCount }) {
 
 //
 function DoubleBracket({ teams, byeCount }) {
-  const [bracket, setBracket] = useState(() => {
-    const wR = buildSingle(teams, byeCount);
-    const nWR = wR.length;
-    const lR = [];
-    for (let i=0; i<nWR-1; i++) {
-      const mc = Math.pow(2, nWR-2-i);
-      lR.push(Array.from({length:mc},(_,mi)=>({a:{name:"TBD",uid:`ld-${i}-${mi}-a`},b:{name:"TBD",uid:`ld-${i}-${mi}-b`},scoreA:"",scoreB:""})));
-      if (i<nWR-2) lR.push(Array.from({length:Math.max(1,mc/2)},(_,mi)=>({a:{name:"TBD",uid:`lp-${i}-${mi}-a`},b:{name:"TBD",uid:`lp-${i}-${mi}-b`},scoreA:"",scoreB:""})));
-    }
-    return { wR, lR, gf:{a:{name:"TBD",uid:"gf-a"},b:{name:"TBD",uid:"gf-b"},scoreA:"",scoreB:""} };
-  });
+  // Build a proper double-elimination bracket
+  // Standard structure: WB has ceil(log2(n)) rounds
+  // LB has 2*(WB rounds - 1) rounds
+  // WB round K losers drop into LB round 2K-1 (drop-in rounds = odd LB rounds)
+  // LB round 2K-1 winners + existing LB teams play in LB round 2K (consolidation rounds = even)
 
-  const propagate = (wR, lR, gf) => {
-    const w=wR.map(r=>r.map(m=>({...m}))), l=lR.map(r=>r.map(m=>({...m}))), g={...gf};
-    const nWR=w.length;
-    for (let ri=0; ri<nWR-1; ri++) {
-      w[ri].forEach((m,mi)=>{ const wn=matchWinner(m),nx=w[ri+1]?.[Math.floor(mi/2)]; if(nx&&wn){const sl=mi%2===0?"a":"b"; if(nx[sl].uid!==wn.uid){nx[sl]=wn;nx.scoreA="";nx.scoreB="";}} });
+  const initBracket = () => {
+    const wR = buildSingle(teams, byeCount);
+    const nWR = wR.length; // number of WB rounds
+
+    // LB has 2*(nWR-1) rounds
+    const lRounds = nWR > 1 ? 2 * (nWR - 1) : 0;
+    const lR = [];
+
+    for (let ri = 0; ri < lRounds; ri++) {
+      const isDropIn = ri % 2 === 0; // even index = drop-in (losers from WB), odd = consolidation
+      const wbRound = Math.floor(ri / 2); // which WB round feeds this drop-in
+      let matchCount;
+      if (isDropIn) {
+        // Drop-in round: same number of matches as WB round that feeds it
+        matchCount = wR[wbRound]?.length || 1;
+      } else {
+        // Consolidation round: half of previous LB round
+        matchCount = Math.ceil((lR[ri - 1]?.length || 2) / 2);
+      }
+      matchCount = Math.max(1, matchCount);
+      lR.push(Array.from({ length: matchCount }, (_, mi) => ({
+        a: { name:"TBD", uid:`lb-${ri}-${mi}-a` },
+        b: { name:"TBD", uid:`lb-${ri}-${mi}-b` },
+        scoreA:"", scoreB:""
+      })));
     }
-    for (let wi=0; wi<nWR-1; wi++) {
-      const ldi=wi*2; if(!l[ldi]) continue;
-      w[wi].forEach((m,mi)=>{ const ln=matchLoser(m),lm=l[ldi][Math.floor(mi/2)]; if(!ln||!lm) return; const sl=mi%2===0?"a":"b"; if(lm[sl].uid!==ln.uid){lm[sl]=ln;lm.scoreA="";lm.scoreB="";} });
-    }
-    for (let ri=0; ri<l.length-1; ri++) {
-      l[ri].forEach((m,mi)=>{ const wn=matchWinner(m),nx=l[ri+1]?.[Math.floor(mi/2)]; if(nx&&wn){const sl=mi%2===0?"a":"b"; if(nx[sl].uid!==wn.uid){nx[sl]=wn;nx.scoreA="";nx.scoreB="";}} });
-    }
-    const wc=matchWinner(w[nWR-1][0]), lc=l.length>0?matchWinner(l[l.length-1][0]):null;
-    if(wc&&g.a.uid!==wc.uid){g.a=wc;g.scoreA="";g.scoreB="";}
-    if(lc&&g.b.uid!==lc.uid){g.b=lc;g.scoreA="";g.scoreB="";}
-    return {wR:w,lR:l,gf:g};
+
+    return {
+      wR,
+      lR,
+      gf:  { a:{name:"TBD",uid:"gf-a"}, b:{name:"TBD",uid:"gf-b"}, scoreA:"", scoreB:"" },
+      gfR: { a:{name:"TBD",uid:"gfr-a"}, b:{name:"TBD",uid:"gfr-b"}, scoreA:"", scoreB:"", active:false },
+    };
   };
 
-  const updW=(ri,mi,f,v)=>setBracket(b=>propagate(b.wR.map((r,rI)=>rI!==ri?r:r.map((m,mI)=>mI!==mi?m:{...m,[f]:v})),b.lR,b.gf));
-  const updL=(ri,mi,f,v)=>setBracket(b=>propagate(b.wR,b.lR.map((r,rI)=>rI!==ri?r:r.map((m,mI)=>mI!==mi?m:{...m,[f]:v})),b.gf));
-  const updGF=(f,v)=>setBracket(b=>({...b,gf:{...b.gf,[f]:v}}));
-  const gfW=matchWinner(bracket.gf);
+  const [bracket, setBracket] = useState(initBracket);
 
-  const SL=(label,color)=><div style={{fontSize:11,fontWeight:700,color,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:4}}>{label}</div>;
+  const propagate = (wR, lR, gf, gfR) => {
+    const w = wR.map(r => r.map(m => ({...m})));
+    const l = lR.map(r => r.map(m => ({...m})));
+    const g = {...gf};
+    const gr = {...gfR};
+    const nWR = w.length;
+
+    // ── Winners bracket propagation ──
+    for (let ri = 0; ri < nWR - 1; ri++) {
+      w[ri].forEach((m, mi) => {
+        const wn = matchWinner(m);
+        const nx = w[ri + 1]?.[Math.floor(mi / 2)];
+        if (nx && wn) {
+          const sl = mi % 2 === 0 ? "a" : "b";
+          if (nx[sl].uid !== wn.uid) { nx[sl] = wn; nx.scoreA = ""; nx.scoreB = ""; }
+        }
+      });
+    }
+
+    // ── Drop losers from WB into LB drop-in rounds ──
+    for (let wbRi = 0; wbRi < nWR - 1; wbRi++) {
+      const lbDropInRi = wbRi * 2; // LB drop-in round index
+      if (!l[lbDropInRi]) continue;
+      w[wbRi].forEach((m, mi) => {
+        const ln = matchLoser(m);
+        if (!ln) return;
+        const lm = l[lbDropInRi][mi];
+        if (!lm) return;
+        // WB Round 1 losers go into slot A (facing TBD from previous LB)
+        // WB Round 2+ losers drop into slot B (facing survivor of previous LB round)
+        const sl = wbRi === 0 ? "a" : "b";
+        if (lm[sl].uid !== ln.uid) { lm[sl] = ln; lm.scoreA = ""; lm.scoreB = ""; }
+      });
+    }
+
+    // ── LB internal propagation ──
+    for (let ri = 0; ri < l.length - 1; ri++) {
+      l[ri].forEach((m, mi) => {
+        const wn = matchWinner(m);
+        if (!wn) return;
+        const nextRi = ri + 1;
+        const isNextDropIn = nextRi % 2 === 0;
+        let nx, sl;
+        if (isNextDropIn) {
+          // Consolidation → next drop-in: winner fills slot B (slot A gets WB loser)
+          nx = l[nextRi]?.[mi];
+          sl = "a"; // consolidation winners go into slot A of drop-in
+        } else {
+          // Drop-in → consolidation: pair up winners
+          nx = l[nextRi]?.[Math.floor(mi / 2)];
+          sl = mi % 2 === 0 ? "a" : "b";
+        }
+        if (nx && nx[sl].uid !== wn.uid) { nx[sl] = wn; nx.scoreA = ""; nx.scoreB = ""; }
+      });
+    }
+
+    // ── Grand Final ──
+    const wbChamp = matchWinner(w[nWR - 1]?.[0] || {});
+    const lbChamp = l.length > 0 ? matchWinner(l[l.length - 1]?.[0] || {}) : null;
+    if (wbChamp && g.a.uid !== wbChamp.uid) { g.a = wbChamp; g.scoreA = ""; g.scoreB = ""; }
+    if (lbChamp && g.b.uid !== lbChamp.uid) { g.b = lbChamp; g.scoreA = ""; g.scoreB = ""; }
+
+    // ── Bracket Reset ── (only if LB player wins GF)
+    const gfWinner = matchWinner(g);
+    const gfLoser  = gfWinner ? (gfWinner.uid === g.a.uid ? g.b : g.a) : null;
+    if (gfWinner && gfLoser && gfWinner.uid === g.b.uid) {
+      // LB player won — bracket reset triggered
+      gr.active = true;
+      if (gr.a.uid !== g.a.uid) { gr.a = g.a; gr.scoreA = ""; gr.scoreB = ""; }
+      if (gr.b.uid !== g.b.uid) { gr.b = g.b; gr.scoreA = ""; gr.scoreB = ""; }
+    } else {
+      gr.active = false;
+    }
+
+    return { wR: w, lR: l, gf: g, gfR: gr };
+  };
+
+  const updW  = (ri,mi,f,v) => setBracket(b => propagate(b.wR.map((r,rI)=>rI!==ri?r:r.map((m,mI)=>mI!==mi?m:{...m,[f]:v})),b.lR,b.gf,b.gfR));
+  const updL  = (ri,mi,f,v) => setBracket(b => propagate(b.wR,b.lR.map((r,rI)=>rI!==ri?r:r.map((m,mI)=>mI!==mi?m:{...m,[f]:v})),b.gf,b.gfR));
+  const updGF = (f,v)        => setBracket(b => propagate(b.wR,b.lR,{...b.gf,[f]:v},b.gfR));
+  const updGFR= (f,v)        => setBracket(b => propagate(b.wR,b.lR,b.gf,{...b.gfR,[f]:v}));
+
+  const gfWinner  = matchWinner(bracket.gf);
+  const gfrWinner = matchWinner(bracket.gfR);
+  const champion  = gfrWinner || (gfWinner?.uid === bracket.gf.a.uid ? gfWinner : null);
+
+  const SL = (label, color) => (
+    <div style={{fontSize:11,fontWeight:700,color,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:4}}>{label}</div>
+  );
+
+  const getLBLabel = (ri) => {
+    const isDropIn = ri % 2 === 0;
+    const num = Math.floor(ri / 2) + 1;
+    return isDropIn ? `LB Drop-in ${num}` : `LB Round ${num}`;
+  };
+
   return (
     <div>
-      {SL("Winners Bracket","#2B8A3E")}
+      {SL("Winners Bracket", "#2B8A3E")}
       <div style={{overflowX:"auto",marginBottom:16}}>
         <div style={{display:"flex",gap:16,minWidth:bracket.wR.length*185}}>
-          {bracket.wR.map((round,ri)=>(
+          {bracket.wR.map((round, ri) => (
             <div key={ri} style={{display:"flex",flexDirection:"column",gap:12,minWidth:172}}>
-              <div style={{fontSize:10,fontWeight:800,color:"#999",textTransform:"uppercase",textAlign:"center"}}>{ri===bracket.wR.length-1?"W Final":`W Rd ${ri+1}`}</div>
-              {round.map((m,mi)=><MatchBox key={mi} match={m} onScore={(f,v)=>updW(ri,mi,f,v)}/>)}
+              <div style={{fontSize:10,fontWeight:800,color:"#999",textTransform:"uppercase",textAlign:"center"}}>
+                {ri === bracket.wR.length-1 ? "WB Final" : ri === bracket.wR.length-2 ? "WB Semis" : `WB Round ${ri+1}`}
+              </div>
+              {round.map((m,mi) => <MatchBox key={mi} match={m} onScore={(f,v)=>updW(ri,mi,f,v)}/>)}
             </div>
           ))}
         </div>
       </div>
-      {bracket.lR.length>0&&<>{SL("Losers Bracket","#C92A2A")}
+
+      {bracket.lR.length > 0 && <>
+        {SL("Losers Bracket", "#C92A2A")}
         <div style={{overflowX:"auto",marginBottom:16}}>
           <div style={{display:"flex",gap:16,minWidth:bracket.lR.length*185}}>
-            {bracket.lR.map((round,ri)=>(
+            {bracket.lR.map((round, ri) => (
               <div key={ri} style={{display:"flex",flexDirection:"column",gap:12,minWidth:172}}>
-                <div style={{fontSize:10,fontWeight:800,color:"#999",textTransform:"uppercase",textAlign:"center"}}>{ri%2===0?`L Drop-in ${Math.floor(ri/2)+1}`:`L Rd ${Math.floor(ri/2)+1}`}</div>
-                {round.map((m,mi)=><MatchBox key={mi} match={m} onScore={(f,v)=>updL(ri,mi,f,v)}/>)}
+                <div style={{fontSize:10,fontWeight:800,color:"#999",textTransform:"uppercase",textAlign:"center"}}>
+                  {getLBLabel(ri)}
+                </div>
+                {round.map((m,mi) => <MatchBox key={mi} match={m} onScore={(f,v)=>updL(ri,mi,f,v)}/>)}
               </div>
             ))}
           </div>
         </div>
       </>}
-      {SL("Grand Final","#856404")}
-      <div style={{display:"flex",gap:16,alignItems:"flex-start"}}>
+
+      {SL("Grand Final", "#856404")}
+      <div style={{fontSize:11,color:"#888",marginBottom:8}}>
+        WB winner vs LB champion — if LB player wins, a bracket reset is played.
+      </div>
+      <div style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
         <div style={{minWidth:185}}><MatchBox match={bracket.gf} onScore={updGF}/></div>
-        {gfW&&<div style={{background:"#FFF3CD",border:"1.5px solid #FFD43B",borderRadius:10,padding:"12px 16px",textAlign:"center",minWidth:90}}>
-          <div style={{fontSize:22}}>🏆</div><div style={{fontSize:10,fontWeight:800,color:"#856404",textTransform:"uppercase",marginTop:4}}>Champion</div>
-          <div style={{fontSize:13,fontWeight:700,color:"#111",marginTop:6}}>{gfW.name}</div>
-        </div>}
+
+        {bracket.gfR.active && <>
+          <div style={{display:"flex",alignItems:"center",color:"#C92A2A",fontWeight:800,fontSize:13,padding:"8px 0"}}>⚡ Reset!</div>
+          <div style={{minWidth:185}}>
+            <div style={{fontSize:10,fontWeight:800,color:"#C92A2A",textTransform:"uppercase",marginBottom:6}}>Bracket Reset</div>
+            <MatchBox match={bracket.gfR} onScore={updGFR}/>
+          </div>
+        </>}
+
+        {champion && (
+          <div style={{background:"#FFF3CD",border:"1.5px solid #FFD43B",borderRadius:10,padding:"12px 16px",textAlign:"center",minWidth:90}}>
+            <div style={{fontSize:22}}>🏆</div>
+            <div style={{fontSize:10,fontWeight:800,color:"#856404",textTransform:"uppercase",marginTop:4}}>Champion</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#111",marginTop:6}}>{champion.name}</div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1218,6 +1342,7 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
   const [confirmRemove, setConfirmRemove] = useState(null); // { uid, name }
   const [showCancel, setShowCancel] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
+  const [showFmtEdit, setShowFmtEdit] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [tab, setTab] = useState("info");
   const [showJoin, setShowJoin] = useState(false);
@@ -1319,6 +1444,32 @@ function EventDetail({ event, currentUser, onJoin, onLeave, onCancel, onUpdateSl
             <div>📅 {event.date} · {event.time}</div>
             <div>📍 {event.location}</div>
             <div>👤 Hosted by <strong>{event.host?.name||event.host}</strong></div>
+            {event.type==="tournament" && (
+              <div style={{display:"flex",alignItems:"center",gap:8,marginTop:2}}>
+                <span>🏆 {FORMATS.find(f=>f.id===event.tournamentFormat)?.label||"Single Elimination"}</span>
+                <span style={{color:"#bbb",fontSize:11}}>· {event.participantType==="teams"?"Teams":"Individual players"}</span>
+                {isHost && (
+                  <button onClick={()=>setShowFmtEdit(s=>!s)}
+                    style={{marginLeft:4,fontSize:11,padding:"2px 8px",borderRadius:6,border:"1.5px solid #ddd",background:"#fff",color:"#888",cursor:"pointer",fontWeight:600}}>
+                    Change
+                  </button>
+                )}
+              </div>
+            )}
+            {showFmtEdit && isHost && (
+              <div style={{marginTop:10,background:"#f7f7f5",borderRadius:10,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Change format</div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {FORMATS.map(f=>(
+                    <button key={f.id} onClick={()=>{onUpdateEvent({...event,tournamentFormat:f.id});setShowFmtEdit(false);}}
+                      style={{padding:"7px 14px",borderRadius:9,border:`1.5px solid ${event.tournamentFormat===f.id?"#111":"#ddd"}`,background:event.tournamentFormat===f.id?"#111":"#fff",color:event.tournamentFormat===f.id?"#fff":"#555",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                      {f.id==="single"?"⚔️":f.id==="double"?"🔁":"🔄"} {f.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{fontSize:11,color:"#aaa"}}>Changing format resets any active bracket in the Bracket tab.</div>
+              </div>
+            )}
           </div>
           <div style={{display:"flex",gap:0,borderTop:"1px solid rgba(0,0,0,.07)",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
             {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"10px 14px",border:"none",background:"transparent",fontSize:13,fontWeight:tab===t.id?700:500,color:tab===t.id?"#111":"#999",cursor:"pointer",borderBottom:`2px solid ${tab===t.id?"#111":"transparent"}`,transition:"all .15s",whiteSpace:"nowrap",flexShrink:0}}>{t.label}</button>)}
