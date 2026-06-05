@@ -193,22 +193,50 @@ function buildSingle(teams, byeCountOverride) {
   // S1 (strongest bye) faces weakest R1 winner, S2 faces next weakest, etc.
   // Any R1 winners without a bye opponent auto-advance
   const r1Winners = r1.map((_, i) => ({ name:"TBD", uid:`tbd-r1-${i}`, seed:0 }));
-  // r1[0] is weakest match (S10vS11), r1Winners[0] is that match's winner
-  // S1 (strongest bye) should face r1Winners[0] (weakest R1 winner) — no reversal needed
-  let feed = [];
-  const paired = Math.min(byeTeams.length, r1Winners.length);
-  for (let i = 0; i < paired; i++) { feed.push({...byeTeams[i], fromBye:true}); feed.push(r1Winners[i]); }
-  for (let i = paired; i < byeTeams.length; i++) feed.push({...byeTeams[i], fromBye:true});
-  for (let i = paired; i < r1Winners.length; i++) feed.push(r1Winners[i]);
 
+  // Build R2 feed with bracket positions matching standard structure:
+  // S1→W0(match), W3(autoAdvance-no R2 match), S2→W1(match), S3→W2(match)
+  // Extra R1 winners (no bye partner) get autoAdvance:true — skip R2, wait in slot
+  const extraR1Winners = r1Winners.slice(paired).map(w => ({...w, autoAdvance:true}));
+  let feed = [];
+  for (let i = 0; i < paired; i++) {
+    feed.push({...byeTeams[i], fromBye:true});
+    feed.push(r1Winners[i]);
+    // Insert extra R1 winner(s) after the first bye pair so they occupy
+    // the adjacent bracket slot — they'll face the first-pair winner in R3
+    if (i === 0) {
+      for (const extra of extraR1Winners) feed.push(extra);
+    }
+  }
+  for (let i = paired; i < byeTeams.length; i++) feed.push({...byeTeams[i], fromBye:true});
+
+  // Process feed into rounds — autoAdvance items skip to next round without a match
   while (feed.length > 1) {
     const matches = [], nextFeed = [];
-    for (let i = 0; i < feed.length; i += 2) {
-      const a = feed[i], b = feed[i+1];
-      if (!b) { nextFeed.push({...a, fromBye:true}); continue; }
+    let fi = 0;
+    while (fi < feed.length) {
+      const a = feed[fi];
+      if (a.autoAdvance) {
+        // Skip this round, carry forward
+        nextFeed.push({ name:"TBD", uid:a.uid, seed:0 });
+        fi++; continue;
+      }
+      const b = feed[fi+1];
+      if (!b || b.autoAdvance) {
+        // a has no real opponent this round — auto-advance a, handle b separately
+        nextFeed.push({ name:"TBD", uid:`tbd-auto-${fi}`, seed:0 });
+        if (b?.autoAdvance) {
+          nextFeed.push({ name:"TBD", uid:b.uid, seed:0 });
+          fi += 2;
+        } else {
+          fi++;
+        }
+        continue;
+      }
       const mi = matches.length;
       matches.push({ a, b, scoreA:"", scoreB:"", auto:null, isBye:false });
       nextFeed.push({ name:"TBD", uid:`tbd-r${rounds.length}-${mi}`, seed:0 });
+      fi += 2;
     }
     if (matches.length > 0) rounds.push(matches);
     feed = nextFeed;
