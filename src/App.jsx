@@ -166,77 +166,66 @@ async function getFirebase() {
 // byeCount: number of top seeds that get a first-round BYE (0 = no byes, everyone plays R1)
 // Seeding rule: top seed plays lowest seed (1 vs N, 2 vs N-1, etc.)
 // BYE rule: top seeds 1..byeCount skip R1 and auto-advance to R2.
-function buildSingle(teams, byeCount) {
-  const bc = byeCount || 0;
-  const seeded = teams.map((t, i) => ({ ...t, seed: i + 1 }));
-  const BYE = id => ({ name:"BYE", uid:"bye-"+id, seed:999, isByeSlot:true });
-
-  // Split teams into bye-receivers (top seeds) and active R1 players
-  const byeTeams    = seeded.slice(0, bc);          // seeds 1..bc -- auto-advance
-  const activeTeams = seeded.slice(bc);              // seeds bc+1..N -- play R1
-
-  // Pair active teams: highest seed vs lowest seed
-  // e.g. 4 active: (1st,4th), (2nd,3rd) → but these are already offset by bc
-  const r1Pairs = [];
-  let lo = 0, hi = activeTeams.length - 1;
-  while (lo < hi) {
-    r1Pairs.push([activeTeams[lo], activeTeams[hi]]);
-    lo++; hi--;
+function standardBracketSeeds(size) {
+  let seeds = [1, 2];
+  while (seeds.length < size) {
+    const next = [];
+    const n = seeds.length * 2 + 1;
+    for (const s of seeds) next.push(s, n - s);
+    seeds = next;
   }
-  // If odd number of active teams, middle one gets a BYE
-  if (lo === hi) r1Pairs.push([activeTeams[lo], BYE("mid-" + lo)]);
+  return seeds;
+}
 
-  const r1Matches = r1Pairs.map(([a, b]) => {
-    const isBye = b.isByeSlot;
-    const auto  = isBye ? a : null;
-    return { a, b, scoreA: isBye ? "W" : "", scoreB: isBye ? "--" : "", auto, isBye };
-  });
+function buildSingle(teams) {
+  const n = teams.length;
+  if (n < 2) return [];
+  let size = 1;
+  while (size < n) size *= 2;
+
+  const BYE = id => ({ name:"BYE", uid:"bye-"+id, seed:999, isByeSlot:true });
+  const seeded = teams.map((t, i) => ({ ...t, seed: i + 1 }));
+  const bracketOrder = standardBracketSeeds(size);
+  const slots = bracketOrder.map(s => s <= n ? seeded[s-1] : BYE(`s${s}`));
+
+  // Build slot pairs
+  const slotPairs = [];
+  for (let i = 0; i < size; i += 2) slotPairs.push([slots[i], slots[i+1]]);
+
+  // Process pairs: BYE opponents → auto-advance (no match shown)
+  // Both real → R1 match
+  const r1Matches = [];
+  let r1Idx = 0;
+  const r2Feed = slotPairs.map(([a, b]) => {
+    const aReal = !a.isByeSlot, bReal = !b.isByeSlot;
+    if (!aReal && !bReal) return null; // both BYE, skip
+    if (!aReal || !bReal) {
+      const winner = aReal ? a : b;
+      return { ...winner, fromBye: true }; // auto-advance
+    }
+    const mi = r1Idx++;
+    r1Matches.push({ a, b, scoreA:"", scoreB:"", auto:null, isBye:false });
+    return { name:"TBD", uid:`tbd-r1-${mi}`, seed:0 };
+  }).filter(Boolean);
 
   const rounds = [];
   if (r1Matches.length > 0) rounds.push(r1Matches);
 
-  // R1 winners (or TBD placeholders) + bye-receivers feed into R2
-  // Pair bye-receivers with R1 match winners: seed 1 faces winner of last R1 match, etc.
-  // Standard: top bye seed plays winner of lowest R1 matchup
-  let r2Entries = [];
-  const r1Winners = r1Matches.map((_, i) => ({ name:"TBD", uid:`tbd-r1-${i}`, seed:0 }));
-
-  // Interleave bye-receivers and r1-winners for correct bracket shape
-  // Bye teams are already top seeds; pair them against r1 winners in reverse order
-  // so seed 1 faces winner of the (bc+1 vs N) match
-  const byeSlots   = byeTeams.map(t => t);
-  const r1WinSlots = [...r1Winners].reverse(); // last r1 winner faces first bye seed
-
-  // Build R2 pairs: each bye seed paired with one R1 winner
-  // Fill remaining R1 winners against each other if more R1 than bye seeds
-  const r2Pairs = [];
-  const usedR1 = [];
-  byeSlots.forEach((byeTeam, i) => {
-    const opponent = r1WinSlots[i] || { name:"TBD", uid:`tbd-r2-bye-${i}`, seed:0 };
-    r2Pairs.push([byeTeam, opponent]);
-    if (r1WinSlots[i]) usedR1.push(r1WinSlots[i].uid);
-  });
-  // Any remaining R1 winners (more R1 matches than bye seeds) pair against each other
-  const remaining = r1Winners.filter(w => !usedR1.includes(w.uid));
-  for (let i = 0; i < remaining.length; i += 2) {
-    if (i + 1 < remaining.length) r2Pairs.push([remaining[i], remaining[i+1]]);
-    else r2Pairs.push([remaining[i], { name:"TBD", uid:`tbd-r2-extra-${i}`, seed:0 }]);
-  }
-
-  if (r2Pairs.length > 0 && bc > 0) {
-    rounds.push(r2Pairs.map(([a, b]) => ({ a, b, scoreA:"", scoreB:"", auto:null, isBye:false })));
-  }
-
-  // Continue building subsequent rounds until 1 match remains
-  while (rounds[rounds.length - 1]?.length > 1) {
-    const prev = rounds[rounds.length - 1];
-    const next = [];
-    for (let i = 0; i < prev.length; i += 2) {
-      const a = { name:"TBD", uid:`tbd-r${rounds.length}-${i}`,   seed:0 };
-      const b = { name:"TBD", uid:`tbd-r${rounds.length}-${i+1}`, seed:0 };
-      next.push({ a, b, scoreA:"", scoreB:"", auto:null, isBye:false });
+  // Build subsequent rounds collapsing any remaining byes
+  let feed = r2Feed;
+  while (feed.length > 1) {
+    const matches = [];
+    const nextFeed = [];
+    for (let i = 0; i < feed.length; i += 2) {
+      const a = feed[i];
+      const b = feed[i + 1];
+      if (!b) { nextFeed.push({ ...a, fromBye: true }); continue; }
+      const mi = matches.length;
+      matches.push({ a, b, scoreA:"", scoreB:"", auto:null, isBye:false });
+      nextFeed.push({ name:"TBD", uid:`tbd-r${rounds.length}-${mi}`, seed:0 });
     }
-    if (next.length > 0) rounds.push(next);
+    if (matches.length > 0) rounds.push(matches);
+    feed = nextFeed;
   }
 
   return rounds;
@@ -430,7 +419,7 @@ function MatchBox({ match, onScore }) {
 
 //
 function SingleBracket({ teams, byeCount }) {
-  const [rounds, setRounds] = useState(() => buildSingle(teams, byeCount));
+  const [rounds, setRounds] = useState(() => buildSingle(teams));
 
   const getW = useCallback(m => matchWinner(m), []);
 
@@ -487,37 +476,36 @@ function DoubleBracket({ teams, byeCount }) {
   // LB round 2K-1 winners + existing LB teams play in LB round 2K (consolidation rounds = even)
 
   const initBracket = () => {
-    const wR = buildSingle(teams, byeCount);
-    const nWR = wR.length; // number of WB rounds
-
-    // LB has 2*(nWR-1) rounds
-    const lRounds = nWR > 1 ? 2 * (nWR - 1) : 0;
+    const wR = buildSingle(teams);
+    const nWR = wR.length;
+    // LB: 2*(nWR-1) rounds
+    // LB R0 (drop-in): WB R1 losers play each other
+    // LB R1 (consolidation): LB R0 winners vs WB R2 losers
+    // alternating drop-in / consolidation
     const lR = [];
-
-    for (let ri = 0; ri < lRounds; ri++) {
-      const isDropIn = ri % 2 === 0; // even index = drop-in (losers from WB), odd = consolidation
-      const wbRound = Math.floor(ri / 2); // which WB round feeds this drop-in
-      let matchCount;
-      if (isDropIn) {
-        // Drop-in round: same number of matches as WB round that feeds it
-        matchCount = wR[wbRound]?.length || 1;
+    for (let ri = 0; ri < 2*(nWR-1); ri++) {
+      const isDropIn   = ri % 2 === 0;
+      const wbRound    = Math.floor(ri/2);
+      let mc;
+      if (ri === 0) {
+        // LB R1: WB R1 losers play each other — ceil(wbR1.length/2) matches
+        mc = Math.max(1, Math.ceil((wR[0]?.length||2)/2));
+      } else if (isDropIn) {
+        mc = Math.max(1, wR[wbRound]?.length || 1);
       } else {
-        // Consolidation round: half of previous LB round
-        matchCount = Math.ceil((lR[ri - 1]?.length || 2) / 2);
+        mc = Math.max(1, Math.ceil((lR[ri-1]?.length||2)/2));
       }
-      matchCount = Math.max(1, matchCount);
-      lR.push(Array.from({ length: matchCount }, (_, mi) => ({
-        a: { name:"TBD", uid:`lb-${ri}-${mi}-a` },
-        b: { name:"TBD", uid:`lb-${ri}-${mi}-b` },
+      lR.push(Array.from({length:mc}, (_,mi) => ({
+        a:{name:"TBD",uid:`lb-${ri}-${mi}-a`},
+        b:{name:"TBD",uid:`lb-${ri}-${mi}-b`},
         scoreA:"", scoreB:""
       })));
     }
-
     return {
       wR,
       lR,
-      gf:  { a:{name:"TBD",uid:"gf-a"}, b:{name:"TBD",uid:"gf-b"}, scoreA:"", scoreB:"" },
-      gfR: { a:{name:"TBD",uid:"gfr-a"}, b:{name:"TBD",uid:"gfr-b"}, scoreA:"", scoreB:"", active:false },
+      gf:  {a:{name:"TBD",uid:"gf-a"},  b:{name:"TBD",uid:"gf-b"},  scoreA:"",scoreB:""},
+      gfR: {a:{name:"TBD",uid:"gfr-a"}, b:{name:"TBD",uid:"gfr-b"}, scoreA:"",scoreB:"",active:false},
     };
   };
 
@@ -530,74 +518,85 @@ function DoubleBracket({ teams, byeCount }) {
     const gr = {...gfR};
     const nWR = w.length;
 
-    // ── Winners bracket propagation ──
-    for (let ri = 0; ri < nWR - 1; ri++) {
+    // ── WB: advance winners ──
+    for (let ri = 0; ri < nWR-1; ri++) {
       w[ri].forEach((m, mi) => {
         const wn = matchWinner(m);
-        const nx = w[ri + 1]?.[Math.floor(mi / 2)];
+        const nx = w[ri+1]?.[Math.floor(mi/2)];
         if (nx && wn) {
-          const sl = mi % 2 === 0 ? "a" : "b";
-          if (nx[sl].uid !== wn.uid) { nx[sl] = wn; nx.scoreA = ""; nx.scoreB = ""; }
+          const sl = mi%2===0?"a":"b";
+          if (nx[sl].uid !== wn.uid) { nx[sl]=wn; nx.scoreA=""; nx.scoreB=""; }
         }
       });
     }
 
-    // ── Drop losers from WB into LB drop-in rounds ──
-    for (let wbRi = 0; wbRi < nWR - 1; wbRi++) {
-      const lbDropInRi = wbRi * 2; // LB drop-in round index
-      if (!l[lbDropInRi]) continue;
-      w[wbRi].forEach((m, mi) => {
-        const ln = matchLoser(m);
-        if (!ln) return;
-        const lm = l[lbDropInRi][mi];
-        if (!lm) return;
-        // WB Round 1 losers go into slot A (facing TBD from previous LB)
-        // WB Round 2+ losers drop into slot B (facing survivor of previous LB round)
-        const sl = wbRi === 0 ? "a" : "b";
-        if (lm[sl].uid !== ln.uid) { lm[sl] = ln; lm.scoreA = ""; lm.scoreB = ""; }
-      });
+    // ── LB R1: WB R1 losers play each other — highest seed vs lowest seed ──
+    if (l[0] && w[0]) {
+      const wbR1Losers = w[0].map(m => matchLoser(m)).filter(Boolean);
+      let lo = 0, hi = wbR1Losers.length - 1, lmi = 0;
+      while (lo < hi && lmi < l[0].length) {
+        const lm = l[0][lmi];
+        if (lm.a.uid !== wbR1Losers[lo].uid) { lm.a=wbR1Losers[lo]; lm.scoreA=""; lm.scoreB=""; }
+        if (lm.b.uid !== wbR1Losers[hi].uid) { lm.b=wbR1Losers[hi]; lm.scoreA=""; lm.scoreB=""; }
+        lo++; hi--; lmi++;
+      }
+      // odd loser out — auto-advance
+      if (lo === hi && lmi < l[0].length) {
+        const lm = l[0][lmi];
+        if (lm.a.uid !== wbR1Losers[lo].uid) { lm.a=wbR1Losers[lo]; lm.scoreA="W"; lm.scoreB="--"; }
+      }
     }
 
-    // ── LB internal propagation ──
-    for (let ri = 0; ri < l.length - 1; ri++) {
-      l[ri].forEach((m, mi) => {
-        const wn = matchWinner(m);
-        if (!wn) return;
-        const nextRi = ri + 1;
-        const isNextDropIn = nextRi % 2 === 0;
-        let nx, sl;
-        if (isNextDropIn) {
-          // Consolidation → next drop-in: winner fills slot B (slot A gets WB loser)
-          nx = l[nextRi]?.[mi];
-          sl = "a"; // consolidation winners go into slot A of drop-in
-        } else {
-          // Drop-in → consolidation: pair up winners
-          nx = l[nextRi]?.[Math.floor(mi / 2)];
-          sl = mi % 2 === 0 ? "a" : "b";
-        }
-        if (nx && nx[sl].uid !== wn.uid) { nx[sl] = wn; nx.scoreA = ""; nx.scoreB = ""; }
-      });
+    // ── LB consolidation rounds (odd index): LB prev winners advance ──
+    // ── LB drop-in rounds (even index, ri >= 2): WB losers drop in ──
+    for (let ri = 1; ri < l.length; ri++) {
+      const isDropIn = ri % 2 === 0;
+      const wbRound  = Math.floor(ri/2); // WB round whose losers drop in here
+
+      if (isDropIn && wbRound < nWR) {
+        // Drop WB round losers into slot B, LB survivors from prev round into slot A
+        // First advance LB prev round winners into slot A
+        l[ri-1].forEach((m, mi) => {
+          const wn = matchWinner(m);
+          const nx = l[ri]?.[mi];
+          if (nx && wn && nx.a.uid !== wn.uid) { nx.a=wn; nx.scoreA=""; nx.scoreB=""; }
+        });
+        // Drop WB losers into slot B
+        w[wbRound]?.forEach((m, mi) => {
+          const ln = matchLoser(m);
+          const nx = l[ri]?.[mi];
+          if (nx && ln && nx.b.uid !== ln.uid) { nx.b=ln; nx.scoreA=""; nx.scoreB=""; }
+        });
+      } else if (!isDropIn) {
+        // Consolidation: pair up LB prev round winners
+        l[ri-1].forEach((m, mi) => {
+          const wn = matchWinner(m);
+          const nx = l[ri]?.[Math.floor(mi/2)];
+          if (nx && wn) {
+            const sl = mi%2===0?"a":"b";
+            if (nx[sl].uid !== wn.uid) { nx[sl]=wn; nx.scoreA=""; nx.scoreB=""; }
+          }
+        });
+      }
     }
 
     // ── Grand Final ──
-    const wbChamp = matchWinner(w[nWR - 1]?.[0] || {});
-    const lbChamp = l.length > 0 ? matchWinner(l[l.length - 1]?.[0] || {}) : null;
-    if (wbChamp && g.a.uid !== wbChamp.uid) { g.a = wbChamp; g.scoreA = ""; g.scoreB = ""; }
-    if (lbChamp && g.b.uid !== lbChamp.uid) { g.b = lbChamp; g.scoreA = ""; g.scoreB = ""; }
+    const wbChamp = matchWinner(w[nWR-1]?.[0]||{});
+    const lbChamp = l.length > 0 ? matchWinner(l[l.length-1]?.[0]||{}) : null;
+    if (wbChamp && g.a.uid!==wbChamp.uid) { g.a=wbChamp; g.scoreA=""; g.scoreB=""; }
+    if (lbChamp && g.b.uid!==lbChamp.uid) { g.b=lbChamp; g.scoreA=""; g.scoreB=""; }
 
-    // ── Bracket Reset ── (only if LB player wins GF)
+    // ── Bracket Reset ──
     const gfWinner = matchWinner(g);
-    const gfLoser  = gfWinner ? (gfWinner.uid === g.a.uid ? g.b : g.a) : null;
-    if (gfWinner && gfLoser && gfWinner.uid === g.b.uid) {
-      // LB player won — bracket reset triggered
+    if (gfWinner && gfWinner.uid === g.b.uid) {
       gr.active = true;
-      if (gr.a.uid !== g.a.uid) { gr.a = g.a; gr.scoreA = ""; gr.scoreB = ""; }
-      if (gr.b.uid !== g.b.uid) { gr.b = g.b; gr.scoreA = ""; gr.scoreB = ""; }
+      if (gr.a.uid!==g.a.uid){gr.a=g.a; gr.scoreA=""; gr.scoreB="";}
+      if (gr.b.uid!==g.b.uid){gr.b=g.b; gr.scoreA=""; gr.scoreB="";}
     } else {
       gr.active = false;
     }
 
-    return { wR: w, lR: l, gf: g, gfR: gr };
+    return { wR:w, lR:l, gf:g, gfR:gr };
   };
 
   const updW  = (ri,mi,f,v) => setBracket(b => propagate(b.wR.map((r,rI)=>rI!==ri?r:r.map((m,mI)=>mI!==mi?m:{...m,[f]:v})),b.lR,b.gf,b.gfR));
@@ -736,82 +735,68 @@ function RobinBracket({ teams }) {
 function SeedingModal({ teams, onConfirm, onClose }) {
   const [seeded, setSeeded] = useState(() => teams.map((t,i)=>({...t,seed:i+1})));
   const [drag, setDrag] = useState(null);
-  const [byeCount, setByeCount] = useState(() => 0);
-  const numByes = byeCount;
-  const maxByes = seeded.length - 1;
 
   const shuffle = () => setSeeded(s => [...s].sort(()=>Math.random()-.5).map((t,i)=>({...t,seed:i+1})));
-  const moveUp = i => { if(i===0) return; const a=[...seeded]; [a[i-1],a[i]]=[a[i],a[i-1]]; setSeeded(a.map((t,idx)=>({...t,seed:idx+1}))); };
+  const moveUp   = i => { if(i===0) return; const a=[...seeded]; [a[i-1],a[i]]=[a[i],a[i-1]]; setSeeded(a.map((t,idx)=>({...t,seed:idx+1}))); };
   const moveDown = i => { if(i===seeded.length-1) return; const a=[...seeded]; [a[i],a[i+1]]=[a[i+1],a[i]]; setSeeded(a.map((t,idx)=>({...t,seed:idx+1}))); };
   const onDragStart = i => setDrag(i);
-  const onDragOver = (e,i) => { e.preventDefault(); if(drag===null||drag===i) return; const a=[...seeded]; const[mv]=a.splice(drag,1); a.splice(i,0,mv); setSeeded(a.map((t,idx)=>({...t,seed:idx+1}))); setDrag(i); };
+  const onDragOver  = (e,i) => { e.preventDefault(); if(drag===null||drag===i) return; const a=[...seeded]; const[mv]=a.splice(drag,1); a.splice(i,0,mv); setSeeded(a.map((t,idx)=>({...t,seed:idx+1}))); setDrag(i); };
 
-  // Preview matchups using same logic as buildSingle
-  const previewMatchups = [];
-  const activeTeams = seeded.slice(numByes);
-  // BYE rows
-  seeded.slice(0, numByes).forEach(t => {
-    previewMatchups.push({ a: t, b: { name:"BYE", seed:999 }, isBye: true });
-  });
-  // R1 pairings: highest vs lowest active seed
-  let lo = 0, hi = activeTeams.length - 1;
-  while (lo < hi) {
-    previewMatchups.push({ a: activeTeams[lo], b: activeTeams[hi], isBye: false });
-    lo++; hi--;
-  }
-  if (lo === hi) previewMatchups.push({ a: activeTeams[lo], b: { name:"BYE", seed:999 }, isBye: true });
+  // Preview using buildSingle — byes are automatic based on team count
+  const previewRounds = buildSingle(seeded);
+  const r1 = previewRounds[0] || [];
+
+  // Determine which seeds get byes (auto-advanced in R2)
+  let size = 1; while (size < seeded.length) size *= 2;
+  const byeSeeds = new Set(standardBracketSeeds(size).slice(seeded.length).map(s => s));
+  const autoAdvance = seeded.filter(t => byeSeeds.has(t.seed));
 
   return (
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
       <div style={{background:"#fff",borderRadius:20,padding:"26px 24px",width:500,maxWidth:"96vw",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,.2)"}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-          <div><div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:20,color:"#111",letterSpacing:-.5}}>🎯 Set Seeding</div>
-            <p style={{fontSize:13,color:"#888",margin:"4px 0 0"}}>Drag to reorder or use arrows. Seed 1 is the top team.</p></div>
-          <button onClick={shuffle} style={{padding:"7px 14px",borderRadius:9,border:"1.5px solid #ddd",background:"#fff",color:"#555",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0,marginLeft:12}}>🎲 Randomize</button>
+          <div>
+            <div style={{fontFamily:"'DM Sans',sans-serif",fontWeight:800,fontSize:20,color:"#111",letterSpacing:-.5}}>🎯 Set Seeding</div>
+            <p style={{fontSize:13,color:"#888",margin:"4px 0 0"}}>Drag to reorder or use arrows. Seed 1 gets the easiest path.</p>
+          </div>
+          <button onClick={()=>setSeeded(teams.map((t,i)=>({...t,seed:i+1})).sort(()=>Math.random()-.5).map((t,i)=>({...t,seed:i+1})))} style={{padding:"7px 14px",borderRadius:9,border:"1.5px solid #ddd",background:"#fff",color:"#555",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0,marginLeft:12}}>🎲 Randomize</button>
         </div>
 
-        <div style={{background:"#F7F7F5",border:"1.5px solid #eee",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>BYE Assignments</div>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <span style={{flex:1,fontSize:13,color:"#444"}}>{numByes===0?"No BYEs -- all teams play Round 1":<>Top <strong>{numByes}</strong> seed{numByes!==1?"s":""} get a BYE and auto-advance</>}</span>
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <button onClick={()=>setByeCount(b=>Math.max(0,b-1))} disabled={byeCount<=0} style={{width:28,height:28,borderRadius:7,border:"1.5px solid #ddd",background:byeCount<=0?"#f5f5f5":"#fff",color:byeCount<=0?"#ccc":"#111",fontWeight:700,fontSize:16,cursor:byeCount<=0?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
-              <span style={{fontWeight:800,fontSize:20,color:"#111",minWidth:24,textAlign:"center"}}>{numByes}</span>
-              <button onClick={()=>setByeCount(b=>Math.min(maxByes,b+1))} disabled={byeCount>=maxByes} style={{width:28,height:28,borderRadius:7,border:"1.5px solid #ddd",background:byeCount>=maxByes?"#f5f5f5":"#fff",color:byeCount>=maxByes?"#ccc":"#111",fontWeight:700,fontSize:16,cursor:byeCount>=maxByes?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
-            </div>
+        {autoAdvance.length > 0 && (
+          <div style={{background:"#F0FBF4",border:"1px solid #2B8A3E22",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#2B8A3E",fontWeight:600}}>
+            ✓ With {seeded.length} teams, seeds {autoAdvance.map(t=>`#${t.seed}`).join(", ")} automatically get byes and skip Round 1.
           </div>
-        </div>
+        )}
 
         <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:20}}>
-          {seeded.map((t,i)=>(
-            <div key={t.uid} draggable onDragStart={()=>onDragStart(i)} onDragOver={e=>onDragOver(e,i)} onDragEnd={()=>setDrag(null)}
-              style={{display:"flex",alignItems:"center",gap:10,background:drag===i?"#EEF5FF":i<numByes?"#F0FBF4":"#fafafa",border:`1.5px solid ${drag===i?"#1971C2":i<numByes?"#2B8A3E22":"#eee"}`,borderRadius:10,padding:"9px 12px",cursor:"grab",userSelect:"none"}}>
-              <span style={{fontSize:11,fontWeight:800,color:"#fff",background:i<numByes?"#2B8A3E":"#bbb",borderRadius:5,padding:"2px 7px",minWidth:28,textAlign:"center",flexShrink:0}}>#{i+1}</span>
-              <span style={{flex:1,fontSize:13,fontWeight:600,color:"#111"}}>{t.name}</span>
-              {i<numByes&&<span style={{fontSize:10,color:"#2B8A3E",background:"#F0FBF4",borderRadius:5,padding:"2px 7px",fontWeight:700}}>BYE ✓</span>}
-              <span style={{fontSize:14,color:"#ccc",marginRight:2}}>⠿</span>
-              <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                <button onClick={()=>moveUp(i)} disabled={i===0} style={{background:"none",border:"none",cursor:i===0?"default":"pointer",color:i===0?"#ddd":"#888",fontSize:12,padding:"0 4px",lineHeight:1}}>▲</button>
-                <button onClick={()=>moveDown(i)} disabled={i===seeded.length-1} style={{background:"none",border:"none",cursor:i===seeded.length-1?"default":"pointer",color:i===seeded.length-1?"#ddd":"#888",fontSize:12,padding:"0 4px",lineHeight:1}}>▼</button>
+          {seeded.map((t,i)=>{
+            const hasBye = autoAdvance.some(a=>a.seed===t.seed);
+            return (
+              <div key={t.uid} draggable onDragStart={()=>onDragStart(i)} onDragOver={e=>onDragOver(e,i)} onDragEnd={()=>setDrag(null)}
+                style={{display:"flex",alignItems:"center",gap:10,background:drag===i?"#EEF5FF":hasBye?"#F0FBF4":"#fafafa",border:`1.5px solid ${drag===i?"#1971C2":hasBye?"#2B8A3E22":"#eee"}`,borderRadius:10,padding:"9px 12px",cursor:"grab",userSelect:"none"}}>
+                <span style={{fontSize:11,fontWeight:800,color:"#fff",background:hasBye?"#2B8A3E":"#bbb",borderRadius:5,padding:"2px 7px",minWidth:28,textAlign:"center",flexShrink:0}}>#{i+1}</span>
+                <span style={{flex:1,fontSize:13,fontWeight:600,color:"#111"}}>{t.name}</span>
+                {hasBye && <span style={{fontSize:10,color:"#2B8A3E",background:"#F0FBF4",borderRadius:5,padding:"2px 7px",fontWeight:700}}>BYE ✓</span>}
+                <span style={{fontSize:14,color:"#ccc",marginRight:2}}>⠿</span>
+                <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                  <button onClick={()=>moveUp(i)} disabled={i===0} style={{background:"none",border:"none",cursor:i===0?"default":"pointer",color:i===0?"#ddd":"#888",fontSize:12,padding:"0 4px",lineHeight:1}}>▲</button>
+                  <button onClick={()=>moveDown(i)} disabled={i===seeded.length-1} style={{background:"none",border:"none",cursor:i===seeded.length-1?"default":"pointer",color:i===seeded.length-1?"#ddd":"#888",fontSize:12,padding:"0 4px",lineHeight:1}}>▼</button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div style={{marginBottom:20}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Bracket Preview</div>
+          <div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Round 1 Matchups</div>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {previewMatchups.map((m,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:m.isBye?"#F0FBF4":"#fafafa",borderRadius:8,padding:"7px 12px",border:`1px solid ${m.isBye?"#2B8A3E22":"#f0f0f0"}`}}>
-                <span style={{fontSize:10,fontWeight:800,color:"#fff",background:m.isBye?"#2B8A3E":"#bbb",borderRadius:4,padding:"1px 5px"}}>#{m.a.seed}</span>
+            {r1.map((m,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:"#fafafa",borderRadius:8,padding:"7px 12px",border:"1px solid #f0f0f0"}}>
+                <span style={{fontSize:10,fontWeight:800,color:"#fff",background:"#bbb",borderRadius:4,padding:"1px 5px"}}>#{m.a.seed||"?"}</span>
                 <span style={{fontSize:13,fontWeight:600,color:"#111",flex:1}}>{m.a.name}</span>
-                {m.isBye
-                  ? <span style={{fontSize:10,color:"#2B8A3E",fontWeight:700,background:"#F0FBF4",borderRadius:5,padding:"2px 8px"}}>BYE -- Auto-advances ✓</span>
-                  : <>
-                      <span style={{fontSize:11,color:"#ccc",fontWeight:700}}>vs</span>
-                      <span style={{fontSize:13,fontWeight:600,color:"#111",flex:1,textAlign:"right"}}>{m.b.name}</span>
-                      <span style={{fontSize:10,fontWeight:800,color:"#fff",background:"#bbb",borderRadius:4,padding:"1px 5px"}}>#{m.b.seed}</span>
-                    </>}
+                <span style={{fontSize:11,color:"#ccc",fontWeight:700}}>vs</span>
+                <span style={{fontSize:13,fontWeight:600,color:"#111",flex:1,textAlign:"right"}}>{m.b.name}</span>
+                <span style={{fontSize:10,fontWeight:800,color:"#fff",background:"#bbb",borderRadius:4,padding:"1px 5px"}}>#{m.b.seed||"?"}</span>
               </div>
             ))}
           </div>
@@ -819,7 +804,7 @@ function SeedingModal({ teams, onConfirm, onClose }) {
 
         <div style={{display:"flex",gap:10}}>
           <button onClick={onClose} style={{flex:1,padding:11,borderRadius:10,border:"1.5px solid #ddd",background:"#fff",color:"#555",fontWeight:600,fontSize:14,cursor:"pointer"}}>Cancel</button>
-          <button onClick={()=>onConfirm(seeded,numByes)} style={{flex:2,padding:11,borderRadius:10,border:"none",background:"#111",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Generate Bracket →</button>
+          <button onClick={()=>onConfirm(seeded)} style={{flex:2,padding:11,borderRadius:10,border:"none",background:"#111",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Generate Bracket →</button>
         </div>
       </div>
     </div>
@@ -832,14 +817,13 @@ function BracketView({ event, isHost }) {
   const teams = event.joined.filter(j=>j.name!=="BYE");
   const [fmt, setFmt] = useState(() => event.tournamentFormat || "single");
   const [seeded, setSeeded] = useState(null);
-  const [byes, setByes] = useState(null);
   const [showSeed, setShowSeed] = useState(false);
   const [key, setKey] = useState(0);
 
   if (teams.length < 2) return <div style={{color:"#bbb",fontSize:13,textAlign:"center",padding:"20px 0"}}>Need at least 2 {pt} to generate a bracket</div>;
 
-  const confirm = (s,b) => { setSeeded(s); setByes(b); setShowSeed(false); setKey(k=>k+1); };
-  const reset = () => { setSeeded(null); setByes(null); setKey(k=>k+1); };
+  const confirm = (s) => { setSeeded(s); setShowSeed(false); setKey(k=>k+1); };
+  const reset = () => { setSeeded(null); setKey(k=>k+1); };
 
   return (
     <div>
@@ -858,15 +842,15 @@ function BracketView({ event, isHost }) {
       {isHost && fmt!=="robin"&&(
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,background:seeded?"#F0FBF4":"#FFFBEB",border:`1px solid ${seeded?"#2B8A3E22":"#FFD43B55"}`,borderRadius:10,padding:"10px 14px"}}>
           <div style={{flex:1,fontSize:13,color:seeded?"#2B8A3E":"#856404",fontWeight:600}}>
-            {seeded?`✓ Seeding set · ${teams.length} ${pt} · ${byes??0} BYE${(byes??0)!==1?"s":""}`:`⚠️ No seeding -- ${pt} in registration order`}
+            {seeded?`✓ Seeding set · ${teams.length} ${pt}`:`⚠️ No seeding -- ${pt} in registration order`}
           </div>
           <button onClick={()=>setShowSeed(true)} style={{padding:"6px 14px",borderRadius:8,border:"1.5px solid #111",background:"#111",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{seeded?"✏️ Edit seeds":"🎯 Set seeding"}</button>
           {seeded&&<button onClick={reset} style={{padding:"6px 10px",borderRadius:8,border:"1.5px solid #ddd",background:"#fff",color:"#888",fontSize:12,cursor:"pointer"}}>Reset</button>}
         </div>
       )}
       <div style={{fontSize:11,color:"#999",marginBottom:12}}>{FORMATS.find(f=>f.id===fmt)?.desc} · {teams.length} {pt}</div>
-      {fmt==="single"&&<SingleBracket key={`s-${key}`} teams={seeded||teams} byeCount={byes}/>}
-      {fmt==="double"&&<DoubleBracket key={`d-${key}`} teams={seeded||teams} byeCount={byes}/>}
+      {fmt==="single"&&<SingleBracket key={`s-${key}`} teams={seeded||teams}/>}
+      {fmt==="double"&&<DoubleBracket key={`d-${key}`} teams={seeded||teams}/>}
       {fmt==="robin" &&<RobinBracket  key={`r-${key}`} teams={teams}/>}
     </div>
   );
