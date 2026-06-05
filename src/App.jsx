@@ -193,12 +193,13 @@ function buildSingle(teams, byeCountOverride) {
   // S1 (strongest bye) faces weakest R1 winner, S2 faces next weakest, etc.
   // Any R1 winners without a bye opponent auto-advance
   const r1Winners = r1.map((_, i) => ({ name:"TBD", uid:`tbd-r1-${i}`, seed:0 }));
-  const r1Rev = [...r1Winners].reverse(); // weakest R1 winner first
+  // r1[0] is weakest match (S10vS11), r1Winners[0] is that match's winner
+  // S1 (strongest bye) should face r1Winners[0] (weakest R1 winner) — no reversal needed
   let feed = [];
-  const paired = Math.min(byeTeams.length, r1Rev.length);
-  for (let i = 0; i < paired; i++) { feed.push({...byeTeams[i], fromBye:true}); feed.push(r1Rev[i]); }
+  const paired = Math.min(byeTeams.length, r1Winners.length);
+  for (let i = 0; i < paired; i++) { feed.push({...byeTeams[i], fromBye:true}); feed.push(r1Winners[i]); }
   for (let i = paired; i < byeTeams.length; i++) feed.push({...byeTeams[i], fromBye:true});
-  for (let i = 0; i < r1Rev.length - paired; i++) feed.push(r1Rev[i]);
+  for (let i = paired; i < r1Winners.length; i++) feed.push(r1Winners[i]);
 
   while (feed.length > 1) {
     const matches = [], nextFeed = [];
