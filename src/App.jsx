@@ -456,215 +456,147 @@ function SingleBracket({ teams, byeCount }) {
 
 //
 function DoubleBracket({ teams, byeCount }) {
-  // Build a proper double-elimination bracket
-  // Standard structure: WB has ceil(log2(n)) rounds
-  // LB has 2*(WB rounds - 1) rounds
-  // WB round K losers drop into LB round 2K-1 (drop-in rounds = odd LB rounds)
-  // LB round 2K-1 winners + existing LB teams play in LB round 2K (consolidation rounds = even)
+  // LB structure matching reference image (11-team double elim):
+  // LB R1 (consolidation): WB R(nWR-1) losers play each other — high vs low seed
+  // LB R2 (drop-in):       LB R1 winners + WB R(nWR-2) losers
+  // LB R3 (consolidation): LB R2 winners pair up
+  // LB R4 (drop-in):       LB R3 winners + WB R(nWR-3) losers
+  // Alternates until 1 LB survivor → Grand Final vs WB champion
 
   const initBracket = () => {
     const wR = buildSingle(teams, byeCount);
     const nWR = wR.length;
-    // LB: 2*(nWR-1) rounds
-    // LB R0 (drop-in): WB R1 losers play each other
-    // LB R1 (consolidation): LB R0 winners vs WB R2 losers
-    // alternating drop-in / consolidation
+    if (nWR < 2) return { wR, lR:[], gf:{a:{name:"TBD",uid:"gf-a"},b:{name:"TBD",uid:"gf-b"},scoreA:"",scoreB:""}, gfR:{a:{name:"TBD",uid:"gfr-a"},b:{name:"TBD",uid:"gfr-b"},scoreA:"",scoreB:"",active:false} };
+
     const lR = [];
-    for (let ri = 0; ri < 2*(nWR-1); ri++) {
-      const isDropIn   = ri % 2 === 0;
-      const wbRound    = Math.floor(ri/2);
+    for (let li = 0; li < 2*(nWR-1); li++) {
+      const isConsolidation = li % 2 === 0;
+      const wbFeedIdx = isConsolidation ? null : nWR - 1 - Math.ceil((li+1)/2);
       let mc;
-      if (ri === 0) {
-        // LB R1: WB R1 losers play each other — ceil(wbR1.length/2) matches
-        mc = Math.max(1, Math.ceil((wR[0]?.length||2)/2));
-      } else if (isDropIn) {
-        mc = Math.max(1, wR[wbRound]?.length || 1);
+      if (li === 0) {
+        // LB R1: WB second-to-last round losers play each other
+        const src = wR[nWR-2]?.length || 2;
+        mc = Math.max(1, Math.ceil(src / 2));
+      } else if (isConsolidation) {
+        mc = Math.max(1, Math.ceil((lR[li-1]?.length || 2) / 2));
       } else {
-        mc = Math.max(1, Math.ceil((lR[ri-1]?.length||2)/2));
+        mc = wbFeedIdx != null && wbFeedIdx >= 0 ? Math.max(1, wR[wbFeedIdx]?.length || 1) : Math.max(1, Math.ceil((lR[li-1]?.length || 2) / 2));
       }
       lR.push(Array.from({length:mc}, (_,mi) => ({
-        a:{name:"TBD",uid:`lb-${ri}-${mi}-a`},
-        b:{name:"TBD",uid:`lb-${ri}-${mi}-b`},
+        a:{name:"TBD",uid:`lb-${li}-${mi}-a`},
+        b:{name:"TBD",uid:`lb-${li}-${mi}-b`},
         scoreA:"", scoreB:""
       })));
     }
-    return {
-      wR,
-      lR,
-      gf:  {a:{name:"TBD",uid:"gf-a"},  b:{name:"TBD",uid:"gf-b"},  scoreA:"",scoreB:""},
-      gfR: {a:{name:"TBD",uid:"gfr-a"}, b:{name:"TBD",uid:"gfr-b"}, scoreA:"",scoreB:"",active:false},
-    };
+    return { wR, lR, gf:{a:{name:"TBD",uid:"gf-a"},b:{name:"TBD",uid:"gf-b"},scoreA:"",scoreB:""}, gfR:{a:{name:"TBD",uid:"gfr-a"},b:{name:"TBD",uid:"gfr-b"},scoreA:"",scoreB:"",active:false} };
   };
 
   const [bracket, setBracket] = useState(initBracket);
 
   const propagate = (wR, lR, gf, gfR) => {
-    const w = wR.map(r => r.map(m => ({...m})));
-    const l = lR.map(r => r.map(m => ({...m})));
-    const g = {...gf};
-    const gr = {...gfR};
-    const nWR = w.length;
+    const w=wR.map(r=>r.map(m=>({...m}))), l=lR.map(r=>r.map(m=>({...m}))), g={...gf}, gr={...gfR};
+    const nWR=w.length;
 
-    // ── WB: advance winners ──
-    for (let ri = 0; ri < nWR-1; ri++) {
-      w[ri].forEach((m, mi) => {
-        const wn = matchWinner(m);
-        const nx = w[ri+1]?.[Math.floor(mi/2)];
-        if (nx && wn) {
-          const sl = mi%2===0?"a":"b";
-          if (nx[sl].uid !== wn.uid) { nx[sl]=wn; nx.scoreA=""; nx.scoreB=""; }
-        }
-      });
+    // WB: advance winners
+    for (let ri=0; ri<nWR-1; ri++) {
+      w[ri].forEach((m,mi)=>{ const wn=matchWinner(m),nx=w[ri+1]?.[Math.floor(mi/2)]; if(nx&&wn){const sl=mi%2===0?"a":"b"; if(nx[sl].uid!==wn.uid){nx[sl]=wn;nx.scoreA="";nx.scoreB="";}} });
     }
 
-    // ── LB R1: WB R1 losers play each other — highest seed vs lowest seed ──
-    if (l[0] && w[0]) {
-      const wbR1Losers = w[0].map(m => matchLoser(m)).filter(Boolean);
-      let lo = 0, hi = wbR1Losers.length - 1, lmi = 0;
-      while (lo < hi && lmi < l[0].length) {
-        const lm = l[0][lmi];
-        if (lm.a.uid !== wbR1Losers[lo].uid) { lm.a=wbR1Losers[lo]; lm.scoreA=""; lm.scoreB=""; }
-        if (lm.b.uid !== wbR1Losers[hi].uid) { lm.b=wbR1Losers[hi]; lm.scoreA=""; lm.scoreB=""; }
+    // LB R1: WB second-to-last round losers play each other (high vs low seed)
+    if (l[0] && nWR>=2) {
+      const losers = w[nWR-2].map(m=>matchLoser(m)).filter(Boolean);
+      let lo=0, hi=losers.length-1, lmi=0;
+      while (lo<hi && lmi<l[0].length) {
+        const lm=l[0][lmi];
+        if(lm.a.uid!==losers[lo].uid){lm.a=losers[lo];lm.scoreA="";lm.scoreB="";}
+        if(lm.b.uid!==losers[hi].uid){lm.b=losers[hi];lm.scoreA="";lm.scoreB="";}
         lo++; hi--; lmi++;
       }
-      // odd loser out — auto-advance
-      if (lo === hi && lmi < l[0].length) {
-        const lm = l[0][lmi];
-        if (lm.a.uid !== wbR1Losers[lo].uid) { lm.a=wbR1Losers[lo]; lm.scoreA="W"; lm.scoreB="--"; }
+      if(lo===hi&&lmi<l[0].length){const lm=l[0][lmi]; if(lm.a.uid!==losers[lo].uid){lm.a=losers[lo];lm.scoreA="W";lm.scoreB="--;";}}
+    }
+
+    // Subsequent LB rounds
+    for (let li=1; li<l.length; li++) {
+      const isConsolidation = li%2===0;
+      const wbFeedIdx = isConsolidation ? null : nWR-1-Math.ceil((li+1)/2);
+
+      if (isConsolidation) {
+        // LB survivors pair up
+        l[li-1].forEach((m,mi)=>{ const wn=matchWinner(m),nx=l[li]?.[Math.floor(mi/2)]; if(nx&&wn){const sl=mi%2===0?"a":"b"; if(nx[sl].uid!==wn.uid){nx[sl]=wn;nx.scoreA="";nx.scoreB="";}} });
+      } else {
+        // LB survivors get slot A, WB losers get slot B
+        l[li-1].forEach((m,mi)=>{ const wn=matchWinner(m),nx=l[li]?.[mi]; if(nx&&wn&&nx.a.uid!==wn.uid){nx.a=wn;nx.scoreA="";nx.scoreB="";} });
+        if (wbFeedIdx!=null&&wbFeedIdx>=0&&w[wbFeedIdx]) {
+          w[wbFeedIdx].forEach((m,mi)=>{ const ln=matchLoser(m),nx=l[li]?.[mi]; if(nx&&ln&&nx.b.uid!==ln.uid){nx.b=ln;nx.scoreA="";nx.scoreB="";} });
+        }
       }
     }
 
-    // ── LB consolidation rounds (odd index): LB prev winners advance ──
-    // ── LB drop-in rounds (even index, ri >= 2): WB losers drop in ──
-    for (let ri = 1; ri < l.length; ri++) {
-      const isDropIn = ri % 2 === 0;
-      const wbRound  = Math.floor(ri/2); // WB round whose losers drop in here
+    // Grand Final
+    const wbChamp=matchWinner(w[nWR-1]?.[0]||{}), lbChamp=l.length>0?matchWinner(l[l.length-1]?.[0]||{}):null;
+    if(wbChamp&&g.a.uid!==wbChamp.uid){g.a=wbChamp;g.scoreA="";g.scoreB="";}
+    if(lbChamp&&g.b.uid!==lbChamp.uid){g.b=lbChamp;g.scoreA="";g.scoreB="";}
 
-      if (isDropIn && wbRound < nWR) {
-        // Drop WB round losers into slot B, LB survivors from prev round into slot A
-        // First advance LB prev round winners into slot A
-        l[ri-1].forEach((m, mi) => {
-          const wn = matchWinner(m);
-          const nx = l[ri]?.[mi];
-          if (nx && wn && nx.a.uid !== wn.uid) { nx.a=wn; nx.scoreA=""; nx.scoreB=""; }
-        });
-        // Drop WB losers into slot B
-        w[wbRound]?.forEach((m, mi) => {
-          const ln = matchLoser(m);
-          const nx = l[ri]?.[mi];
-          if (nx && ln && nx.b.uid !== ln.uid) { nx.b=ln; nx.scoreA=""; nx.scoreB=""; }
-        });
-      } else if (!isDropIn) {
-        // Consolidation: pair up LB prev round winners
-        l[ri-1].forEach((m, mi) => {
-          const wn = matchWinner(m);
-          const nx = l[ri]?.[Math.floor(mi/2)];
-          if (nx && wn) {
-            const sl = mi%2===0?"a":"b";
-            if (nx[sl].uid !== wn.uid) { nx[sl]=wn; nx.scoreA=""; nx.scoreB=""; }
-          }
-        });
-      }
-    }
-
-    // ── Grand Final ──
-    const wbChamp = matchWinner(w[nWR-1]?.[0]||{});
-    const lbChamp = l.length > 0 ? matchWinner(l[l.length-1]?.[0]||{}) : null;
-    if (wbChamp && g.a.uid!==wbChamp.uid) { g.a=wbChamp; g.scoreA=""; g.scoreB=""; }
-    if (lbChamp && g.b.uid!==lbChamp.uid) { g.b=lbChamp; g.scoreA=""; g.scoreB=""; }
-
-    // ── Bracket Reset ──
-    const gfWinner = matchWinner(g);
-    if (gfWinner && gfWinner.uid === g.b.uid) {
-      gr.active = true;
-      if (gr.a.uid!==g.a.uid){gr.a=g.a; gr.scoreA=""; gr.scoreB="";}
-      if (gr.b.uid!==g.b.uid){gr.b=g.b; gr.scoreA=""; gr.scoreB="";}
-    } else {
-      gr.active = false;
-    }
-
-    return { wR:w, lR:l, gf:g, gfR:gr };
+    // Bracket Reset
+    const gfWinner=matchWinner(g);
+    if(gfWinner&&gfWinner.uid===g.b.uid){gr.active=true; if(gr.a.uid!==g.a.uid){gr.a=g.a;gr.scoreA="";gr.scoreB="";} if(gr.b.uid!==g.b.uid){gr.b=g.b;gr.scoreA="";gr.scoreB="";}}
+    else{gr.active=false;}
+    return{wR:w,lR:l,gf:g,gfR:gr};
   };
 
-  const updW  = (ri,mi,f,v) => setBracket(b => propagate(b.wR.map((r,rI)=>rI!==ri?r:r.map((m,mI)=>mI!==mi?m:{...m,[f]:v})),b.lR,b.gf,b.gfR));
-  const updL  = (ri,mi,f,v) => setBracket(b => propagate(b.wR,b.lR.map((r,rI)=>rI!==ri?r:r.map((m,mI)=>mI!==mi?m:{...m,[f]:v})),b.gf,b.gfR));
-  const updGF = (f,v)        => setBracket(b => propagate(b.wR,b.lR,{...b.gf,[f]:v},b.gfR));
-  const updGFR= (f,v)        => setBracket(b => propagate(b.wR,b.lR,b.gf,{...b.gfR,[f]:v}));
+  const updW =(ri,mi,f,v)=>setBracket(b=>propagate(b.wR.map((r,rI)=>rI!==ri?r:r.map((m,mI)=>mI!==mi?m:{...m,[f]:v})),b.lR,b.gf,b.gfR));
+  const updL =(ri,mi,f,v)=>setBracket(b=>propagate(b.wR,b.lR.map((r,rI)=>rI!==ri?r:r.map((m,mI)=>mI!==mi?m:{...m,[f]:v})),b.gf,b.gfR));
+  const updGF=(f,v)=>setBracket(b=>propagate(b.wR,b.lR,{...b.gf,[f]:v},b.gfR));
+  const updGFR=(f,v)=>setBracket(b=>propagate(b.wR,b.lR,b.gf,{...b.gfR,[f]:v}));
 
-  const gfWinner  = matchWinner(bracket.gf);
-  const gfrWinner = matchWinner(bracket.gfR);
-  const champion  = gfrWinner || (gfWinner?.uid === bracket.gf.a.uid ? gfWinner : null);
-
-  const SL = (label, color) => (
-    <div style={{fontSize:11,fontWeight:700,color,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:4}}>{label}</div>
-  );
-
-  const getLBLabel = (ri) => {
-    const isDropIn = ri % 2 === 0;
-    const num = Math.floor(ri / 2) + 1;
-    return isDropIn ? `LB Drop-in ${num}` : `LB Round ${num}`;
-  };
+  const gfWinner=matchWinner(bracket.gf), gfrWinner=matchWinner(bracket.gfR);
+  const champion=gfrWinner||(gfWinner?.uid===bracket.gf.a.uid?gfWinner:null);
+  const SL=(label,color)=><div style={{fontSize:11,fontWeight:700,color,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:4}}>{label}</div>;
+  const getLBLabel=(li)=>{ const isC=li%2===0; const n=Math.floor(li/2)+1; return isC?`LB Round ${n}`:`LB Drop-in ${n}`; };
 
   return (
     <div>
-      {SL("Winners Bracket", "#2B8A3E")}
+      {SL("Winners Bracket","#2B8A3E")}
       <div style={{overflowX:"auto",marginBottom:16}}>
         <div style={{display:"flex",gap:16,minWidth:bracket.wR.length*185}}>
-          {bracket.wR.map((round, ri) => (
+          {bracket.wR.map((round,ri)=>(
             <div key={ri} style={{display:"flex",flexDirection:"column",gap:12,minWidth:172}}>
               <div style={{fontSize:10,fontWeight:800,color:"#999",textTransform:"uppercase",textAlign:"center"}}>
-                {ri === bracket.wR.length-1 ? "WB Final" : ri === bracket.wR.length-2 ? "WB Semis" : `WB Round ${ri+1}`}
+                {ri===bracket.wR.length-1?"WB Final":ri===bracket.wR.length-2?"WB Semis":`WB Round ${ri+1}`}
               </div>
-              {round.map((m,mi) => <MatchBox key={mi} match={m} onScore={(f,v)=>updW(ri,mi,f,v)}/>)}
+              {round.map((m,mi)=><MatchBox key={mi} match={m} onScore={(f,v)=>updW(ri,mi,f,v)}/>)}
             </div>
           ))}
         </div>
       </div>
-
-      {bracket.lR.length > 0 && <>
-        {SL("Losers Bracket", "#C92A2A")}
+      {bracket.lR.length>0&&<>
+        {SL("Losers Bracket","#C92A2A")}
         <div style={{overflowX:"auto",marginBottom:16}}>
           <div style={{display:"flex",gap:16,minWidth:bracket.lR.length*185}}>
-            {bracket.lR.map((round, ri) => (
-              <div key={ri} style={{display:"flex",flexDirection:"column",gap:12,minWidth:172}}>
-                <div style={{fontSize:10,fontWeight:800,color:"#999",textTransform:"uppercase",textAlign:"center"}}>
-                  {getLBLabel(ri)}
-                </div>
-                {round.map((m,mi) => <MatchBox key={mi} match={m} onScore={(f,v)=>updL(ri,mi,f,v)}/>)}
+            {bracket.lR.map((round,li)=>(
+              <div key={li} style={{display:"flex",flexDirection:"column",gap:12,minWidth:172}}>
+                <div style={{fontSize:10,fontWeight:800,color:"#999",textTransform:"uppercase",textAlign:"center"}}>{getLBLabel(li)}</div>
+                {round.map((m,mi)=><MatchBox key={mi} match={m} onScore={(f,v)=>updL(li,mi,f,v)}/>)}
               </div>
             ))}
           </div>
         </div>
       </>}
-
-      {SL("Grand Final", "#856404")}
-      <div style={{fontSize:11,color:"#888",marginBottom:8}}>
-        WB winner vs LB champion — if LB player wins, a bracket reset is played.
-      </div>
+      {SL("Grand Final","#856404")}
+      <div style={{fontSize:11,color:"#888",marginBottom:8}}>WB champion vs LB champion — LB win triggers bracket reset.</div>
       <div style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
         <div style={{minWidth:185}}><MatchBox match={bracket.gf} onScore={updGF}/></div>
-
-        {bracket.gfR.active && <>
-          <div style={{display:"flex",alignItems:"center",color:"#C92A2A",fontWeight:800,fontSize:13,padding:"8px 0"}}>⚡ Reset!</div>
-          <div style={{minWidth:185}}>
-            <div style={{fontSize:10,fontWeight:800,color:"#C92A2A",textTransform:"uppercase",marginBottom:6}}>Bracket Reset</div>
-            <MatchBox match={bracket.gfR} onScore={updGFR}/>
-          </div>
-        </>}
-
-        {champion && (
-          <div style={{background:"#FFF3CD",border:"1.5px solid #FFD43B",borderRadius:10,padding:"12px 16px",textAlign:"center",minWidth:90}}>
-            <div style={{fontSize:22}}>🏆</div>
-            <div style={{fontSize:10,fontWeight:800,color:"#856404",textTransform:"uppercase",marginTop:4}}>Champion</div>
-            <div style={{fontSize:13,fontWeight:700,color:"#111",marginTop:6}}>{champion.name}</div>
-          </div>
-        )}
+        {bracket.gfR.active&&<><div style={{display:"flex",alignItems:"center",color:"#C92A2A",fontWeight:800,fontSize:13,padding:"8px 0"}}>⚡ Reset!</div>
+          <div style={{minWidth:185}}><div style={{fontSize:10,fontWeight:800,color:"#C92A2A",textTransform:"uppercase",marginBottom:6}}>Bracket Reset</div><MatchBox match={bracket.gfR} onScore={updGFR}/></div></>}
+        {champion&&<div style={{background:"#FFF3CD",border:"1.5px solid #FFD43B",borderRadius:10,padding:"12px 16px",textAlign:"center",minWidth:90}}>
+          <div style={{fontSize:22}}>🏆</div><div style={{fontSize:10,fontWeight:800,color:"#856404",textTransform:"uppercase",marginTop:4}}>Champion</div>
+          <div style={{fontSize:13,fontWeight:700,color:"#111",marginTop:6}}>{champion.name}</div>
+        </div>}
       </div>
     </div>
   );
 }
 
-//
 function RobinBracket({ teams }) {
   const initMatches = () => {
     const m=[];
