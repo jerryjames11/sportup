@@ -166,15 +166,18 @@ async function getFirebase() {
 // byeCount: number of top seeds that get a first-round BYE (0 = no byes, everyone plays R1)
 // Seeding rule: top seed plays lowest seed (1 vs N, 2 vs N-1, etc.)
 // BYE rule: top seeds 1..byeCount skip R1 and auto-advance to R2.
-function buildSingle(teams, byeCount) {
+function buildSingle(teams, byeCountOverride) {
   const n = teams.length;
   if (n < 2) return [];
   const seeded = teams.map((t, i) => ({ ...t, seed: i + 1 }));
-  const isOdd = n % 2 === 1;
-  // odd→1 bye (auto), even→0 or 2 byes (host picks, default 0)
-  const byes = byeCount != null ? byeCount : (isOdd ? 1 : 0);
-  const byeTeams = seeded.slice(0, byes);
-  const actTeams = seeded.slice(byes); // always even
+
+  // Byes = N - (largest power of 2 ≤ N)
+  // This ensures active teams in R1 is always a power of 2
+  let activePow = 1;
+  while (activePow * 2 <= n) activePow *= 2;
+  const autoByes = byeCountOverride != null ? byeCountOverride : (n - activePow);
+  const byeTeams = seeded.slice(0, autoByes);  // top seeds get byes
+  const actTeams = seeded.slice(autoByes);      // always a power of 2
 
   // R1: pair highest vs lowest active seed
   const r1 = [];
@@ -184,30 +187,24 @@ function buildSingle(teams, byeCount) {
     lo++; hi--;
   }
 
-  const rounds = [];
-  if (r1.length > 0) rounds.push(r1);
+  const rounds = [r1];
 
+  // Feed bye teams into R2 interleaved with R1 winners
+  // S1 (strongest bye) faces weakest R1 winner, S2 faces next weakest, etc.
+  // Any R1 winners without a bye opponent auto-advance
   const r1Winners = r1.map((_, i) => ({ name:"TBD", uid:`tbd-r1-${i}`, seed:0 }));
-  const autoAdv = byeTeams.map(t => ({ ...t, fromBye:true }));
-
-  // Feed into next round:
-  // Each bye team pairs with the weakest available R1 winner
-  // Extra bye teams (more byes than R1 matches) enter as auto-advancers
-  // Extra R1 winners pair among themselves
-  const paired = Math.min(autoAdv.length, r1Winners.length);
+  const r1Rev = [...r1Winners].reverse(); // weakest R1 winner first
   let feed = [];
-  for (let i = 0; i < paired; i++) {
-    feed.push(autoAdv[i]);
-    feed.push(r1Winners[r1Winners.length - 1 - i]);
-  }
-  for (let i = paired; i < autoAdv.length; i++) feed.push(autoAdv[i]);
-  for (let i = 0; i < r1Winners.length - paired; i++) feed.push(r1Winners[i]);
+  const paired = Math.min(byeTeams.length, r1Rev.length);
+  for (let i = 0; i < paired; i++) { feed.push({...byeTeams[i], fromBye:true}); feed.push(r1Rev[i]); }
+  for (let i = paired; i < byeTeams.length; i++) feed.push({...byeTeams[i], fromBye:true});
+  for (let i = 0; i < r1Rev.length - paired; i++) feed.push(r1Rev[i]);
 
   while (feed.length > 1) {
     const matches = [], nextFeed = [];
     for (let i = 0; i < feed.length; i += 2) {
       const a = feed[i], b = feed[i+1];
-      if (!b) { nextFeed.push({ ...a, fromBye:true }); continue; }
+      if (!b) { nextFeed.push({...a, fromBye:true}); continue; }
       const mi = matches.length;
       matches.push({ a, b, scoreA:"", scoreB:"", auto:null, isBye:false });
       nextFeed.push({ name:"TBD", uid:`tbd-r${rounds.length}-${mi}`, seed:0 });
@@ -456,31 +453,54 @@ function SingleBracket({ teams, byeCount }) {
 
 //
 function DoubleBracket({ teams, byeCount }) {
-  // LB structure matching reference image (11-team double elim):
-  // LB R1 (consolidation): WB R(nWR-1) losers play each other — high vs low seed
-  // LB R2 (drop-in):       LB R1 winners + WB R(nWR-2) losers
-  // LB R3 (consolidation): LB R2 winners pair up
-  // LB R4 (drop-in):       LB R3 winners + WB R(nWR-3) losers
-  // Alternates until 1 LB survivor → Grand Final vs WB champion
+  // LB structure: 2*nWR-1 rounds total
+  // LB R1,R2 = consolidation of WB R1 losers
+  // LB R3 = drop-in of WB R2 losers
+  // LB R4 = consolidation
+  // LB R5..end = alternating drop-in (each WB R3+ loser enters individually)
 
   const initBracket = () => {
     const wR = buildSingle(teams, byeCount);
     const nWR = wR.length;
     if (nWR < 2) return { wR, lR:[], gf:{a:{name:"TBD",uid:"gf-a"},b:{name:"TBD",uid:"gf-b"},scoreA:"",scoreB:""}, gfR:{a:{name:"TBD",uid:"gfr-a"},b:{name:"TBD",uid:"gfr-b"},scoreA:"",scoreB:"",active:false} };
 
+    // LB round count = 2*nWR - 1
+    // Drop-in schedule (which WB round's losers enter each LB round):
+    // LB rounds 1-2: WB R1 losers consolidate
+    // LB round 3: WB R2 losers drop in
+    // LB round 4: consolidation
+    // LB rounds 5,6: WB R3 losers drop in (one per round if 2 losers)
+    // ... each subsequent WB round's losers fill one drop-in LB round
     const lR = [];
-    for (let li = 0; li < 2*(nWR-1); li++) {
-      const isConsolidation = li % 2 === 0;
-      const wbFeedIdx = isConsolidation ? null : nWR - 1 - Math.ceil((li+1)/2);
+    const totalLB = 2 * nWR - 1;
+
+    for (let li = 0; li < totalLB; li++) {
       let mc;
       if (li === 0) {
-        // LB R1: WB second-to-last round losers play each other
-        const src = wR[nWR-2]?.length || 2;
-        mc = Math.max(1, Math.ceil(src / 2));
-      } else if (isConsolidation) {
-        mc = Math.max(1, Math.ceil((lR[li-1]?.length || 2) / 2));
+        // LB R1: WB R1 losers pair up → wR[0].length/2 matches
+        mc = Math.max(1, Math.ceil(wR[0].length / 2));
+      } else if (li === 1) {
+        // LB R2: consolidation of LB R1 → half as many matches
+        mc = Math.max(1, Math.ceil((lR[0].length) / 2));
+      } else if (li === 2) {
+        // LB R3: WB R2 losers + LB R2 winners
+        // WB R2 has wR[1].length matches → wR[1].length losers
+        // LB R2 has lR[1].length matches → lR[1].length survivors
+        // Total = wR[1].length + lR[1].length, paired → total/2 matches
+        const incoming = wR[1]?.length || 0;
+        const survivors = lR[1]?.length || 0;
+        mc = Math.max(1, Math.ceil((incoming + survivors) / 2));
       } else {
-        mc = wbFeedIdx != null && wbFeedIdx >= 0 ? Math.max(1, wR[wbFeedIdx]?.length || 1) : Math.max(1, Math.ceil((lR[li-1]?.length || 2) / 2));
+        // LB R4+: alternating consolidation and single drop-in
+        // Even li (4,6,8...) = consolidation
+        // Odd li (5,7,9...) = drop-in from WB round (li-3+2) = WB R(li-1)/2+1
+        const isConsolid = li % 2 === 0;
+        if (isConsolid) {
+          mc = Math.max(1, Math.ceil((lR[li-1]?.length || 2) / 2));
+        } else {
+          // Drop-in: 1 WB loser + LB survivor = 1 match
+          mc = 1;
+        }
       }
       lR.push(Array.from({length:mc}, (_,mi) => ({
         a:{name:"TBD",uid:`lb-${li}-${mi}-a`},
@@ -497,37 +517,77 @@ function DoubleBracket({ teams, byeCount }) {
     const w=wR.map(r=>r.map(m=>({...m}))), l=lR.map(r=>r.map(m=>({...m}))), g={...gf}, gr={...gfR};
     const nWR=w.length;
 
-    // WB: advance winners
+    // WB: advance winners forward
     for (let ri=0; ri<nWR-1; ri++) {
       w[ri].forEach((m,mi)=>{ const wn=matchWinner(m),nx=w[ri+1]?.[Math.floor(mi/2)]; if(nx&&wn){const sl=mi%2===0?"a":"b"; if(nx[sl].uid!==wn.uid){nx[sl]=wn;nx.scoreA="";nx.scoreB="";}} });
     }
 
-    // LB R1: WB second-to-last round losers play each other (high vs low seed)
-    if (l[0] && nWR>=2) {
-      const losers = w[nWR-2].map(m=>matchLoser(m)).filter(Boolean);
-      let lo=0, hi=losers.length-1, lmi=0;
-      while (lo<hi && lmi<l[0].length) {
+    // LB R1: WB R1 losers pair high vs low seed
+    if (l[0] && w[0]) {
+      const losers=w[0].map(m=>matchLoser(m)).filter(Boolean);
+      let lo=0,hi=losers.length-1,lmi=0;
+      while(lo<hi&&lmi<l[0].length){
         const lm=l[0][lmi];
         if(lm.a.uid!==losers[lo].uid){lm.a=losers[lo];lm.scoreA="";lm.scoreB="";}
         if(lm.b.uid!==losers[hi].uid){lm.b=losers[hi];lm.scoreA="";lm.scoreB="";}
-        lo++; hi--; lmi++;
+        lo++;hi--;lmi++;
       }
-      if(lo===hi&&lmi<l[0].length){const lm=l[0][lmi]; if(lm.a.uid!==losers[lo].uid){lm.a=losers[lo];lm.scoreA="W";lm.scoreB="--;";}}
     }
 
-    // Subsequent LB rounds
-    for (let li=1; li<l.length; li++) {
-      const isConsolidation = li%2===0;
-      const wbFeedIdx = isConsolidation ? null : nWR-1-Math.ceil((li+1)/2);
+    // LB R2: consolidation of LB R1 winners
+    if (l[1] && l[0]) {
+      l[0].forEach((m,mi)=>{ const wn=matchWinner(m),nx=l[1]?.[Math.floor(mi/2)]; if(nx&&wn){const sl=mi%2===0?"a":"b"; if(nx[sl].uid!==wn.uid){nx[sl]=wn;nx.scoreA="";nx.scoreB="";}} });
+    }
 
-      if (isConsolidation) {
-        // LB survivors pair up
+    // LB R3: WB R2 losers + LB R2 winners
+    if (l[2] && l[1] && w[1]) {
+      // LB R2 survivors go to slot A, WB R2 losers to slot B (paired)
+      const lbSurv=l[1].map(m=>matchWinner(m)).filter(Boolean);
+      const wbLose=w[1].map(m=>matchLoser(m)).filter(Boolean);
+      // Build interleaved feed: LB survivor, WB loser, LB survivor, WB loser...
+      // Extra WB losers without LB partner play each other in remaining slots
+      let lsi=0, wli=0, lmi=0;
+      while((lsi<lbSurv.length||wli<wbLose.length)&&lmi<l[2].length){
+        const lm=l[2][lmi];
+        if(lsi<lbSurv.length&&wli<wbLose.length){
+          if(lm.a.uid!==lbSurv[lsi].uid){lm.a=lbSurv[lsi];lm.scoreA="";lm.scoreB="";}
+          if(lm.b.uid!==wbLose[wli].uid){lm.b=wbLose[wli];lm.scoreA="";lm.scoreB="";}
+          lsi++;wli++;
+        } else if(wli+1<wbLose.length){
+          // Extra WB losers play each other
+          if(lm.a.uid!==wbLose[wli].uid){lm.a=wbLose[wli];lm.scoreA="";lm.scoreB="";}
+          if(lm.b.uid!==wbLose[wli+1].uid){lm.b=wbLose[wli+1];lm.scoreA="";lm.scoreB="";}
+          wli+=2;
+        } else { break; }
+        lmi++;
+      }
+    }
+
+    // LB R4+: alternating consolidation and single drop-in
+    // Track which WB round feeds each drop-in
+    // Drop-ins after R3 are individual: WB R3 losers one per LB round, then WB R4, etc.
+    let wbDropRound = 2; // WB R3 = index 2 (0-based)
+    let wbDropMatchIdx = 0;
+    for (let li=3; li<l.length; li++) {
+      const isConsolid = li%2===0;
+      if (isConsolid) {
+        // Consolidation: pair LB prev winners
         l[li-1].forEach((m,mi)=>{ const wn=matchWinner(m),nx=l[li]?.[Math.floor(mi/2)]; if(nx&&wn){const sl=mi%2===0?"a":"b"; if(nx[sl].uid!==wn.uid){nx[sl]=wn;nx.scoreA="";nx.scoreB="";}} });
       } else {
-        // LB survivors get slot A, WB losers get slot B
-        l[li-1].forEach((m,mi)=>{ const wn=matchWinner(m),nx=l[li]?.[mi]; if(nx&&wn&&nx.a.uid!==wn.uid){nx.a=wn;nx.scoreA="";nx.scoreB="";} });
-        if (wbFeedIdx!=null&&wbFeedIdx>=0&&w[wbFeedIdx]) {
-          w[wbFeedIdx].forEach((m,mi)=>{ const ln=matchLoser(m),nx=l[li]?.[mi]; if(nx&&ln&&nx.b.uid!==ln.uid){nx.b=ln;nx.scoreA="";nx.scoreB="";} });
+        // Drop-in: 1 WB loser (slot B) vs LB survivor (slot A)
+        const lbW=matchWinner(l[li-1]?.[0]||{});
+        if(l[li]?.[0]&&lbW&&l[li][0].a.uid!==lbW.uid){l[li][0].a=lbW;l[li][0].scoreA="";l[li][0].scoreB="";}
+        // Get next WB loser to drop in
+        while(wbDropRound<nWR-1&&(!w[wbDropRound]||wbDropMatchIdx>=w[wbDropRound].length)){wbDropRound++;wbDropMatchIdx=0;}
+        if(wbDropRound<nWR-1&&w[wbDropRound]){
+          const ln=matchLoser(w[wbDropRound][wbDropMatchIdx]);
+          if(l[li]?.[0]&&ln&&l[li][0].b.uid!==ln.uid){l[li][0].b=ln;l[li][0].scoreA="";l[li][0].scoreB="";}
+          wbDropMatchIdx++;
+          if(wbDropMatchIdx>=w[wbDropRound].length){wbDropRound++;wbDropMatchIdx=0;}
+        } else if(wbDropRound===nWR-1&&w[nWR-1]){
+          // WB Final loser
+          const ln=matchLoser(w[nWR-1][0]||{});
+          if(l[li]?.[0]&&ln&&l[li][0].b.uid!==ln.uid){l[li][0].b=ln;l[li][0].scoreA="";l[li][0].scoreB="";}
         }
       }
     }
@@ -552,7 +612,15 @@ function DoubleBracket({ teams, byeCount }) {
   const gfWinner=matchWinner(bracket.gf), gfrWinner=matchWinner(bracket.gfR);
   const champion=gfrWinner||(gfWinner?.uid===bracket.gf.a.uid?gfWinner:null);
   const SL=(label,color)=><div style={{fontSize:11,fontWeight:700,color,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:4}}>{label}</div>;
-  const getLBLabel=(li)=>{ const isC=li%2===0; const n=Math.floor(li/2)+1; return isC?`LB Round ${n}`:`LB Drop-in ${n}`; };
+  const getLBLabel=(li)=>{
+    if(li===0) return "LB Round 1";
+    if(li===1) return "LB Round 2";
+    if(li===2) return "LB Drop-in 1";
+    const idx=li-3;
+    const isDropIn=idx%2===1;
+    const num=Math.floor(idx/2)+2;
+    return isDropIn?`LB Drop-in ${num}`:`LB Round ${num+1}`;
+  };
 
   return (
     <div>
@@ -655,9 +723,11 @@ function SeedingModal({ teams, onConfirm, onClose }) {
   const [seeded, setSeeded] = useState(() => teams.map((t,i)=>({...t,seed:i+1})));
   const [drag, setDrag]     = useState(null);
   const n = seeded.length;
-  const isOdd = n % 2 === 1;
-  // odd: always 1 bye; even: 0 or 2 byes
-  const [byeCount, setByeCount] = useState(() => isOdd ? 1 : 0);
+
+  // Auto-calculate byes: top (N - largest_pow2_leq_N) seeds get byes
+  let activePow = 1;
+  while (activePow * 2 <= n) activePow *= 2;
+  const autoByes = n - activePow;
 
   const shuffle  = () => setSeeded(s=>[...s].sort(()=>Math.random()-.5).map((t,i)=>({...t,seed:i+1})));
   const moveUp   = i => { if(i===0) return; const a=[...seeded]; [a[i-1],a[i]]=[a[i],a[i-1]]; setSeeded(a.map((t,idx)=>({...t,seed:idx+1}))); };
@@ -665,9 +735,9 @@ function SeedingModal({ teams, onConfirm, onClose }) {
   const onDragStart = i => setDrag(i);
   const onDragOver  = (e,i) => { e.preventDefault(); if(drag===null||drag===i) return; const a=[...seeded]; const[mv]=a.splice(drag,1); a.splice(i,0,mv); setSeeded(a.map((t,idx)=>({...t,seed:idx+1}))); setDrag(i); };
 
-  const previewRounds = buildSingle(seeded, byeCount);
+  const previewRounds = buildSingle(seeded);
   const r1 = previewRounds[0] || [];
-  const byeTeamNames = seeded.slice(0, byeCount).map(t=>`#${t.seed} ${t.name}`);
+  const byeTeamNames = seeded.slice(0, autoByes).map(t => t.name);
 
   return (
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
@@ -680,34 +750,16 @@ function SeedingModal({ teams, onConfirm, onClose }) {
           <button onClick={shuffle} style={{padding:"7px 14px",borderRadius:9,border:"1.5px solid #ddd",background:"#fff",color:"#555",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0,marginLeft:12}}>🎲 Randomize</button>
         </div>
 
-        {/* Bye selector */}
-        <div style={{background:"#F7F7F5",border:"1.5px solid #eee",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>First Round Byes</div>
-          {isOdd ? (
-            <div style={{fontSize:13,color:"#2B8A3E",fontWeight:600}}>✓ {n} teams (odd) — Seed 1 automatically gets a bye</div>
-          ) : (
-            <div style={{display:"flex",gap:10}}>
-              <button onClick={()=>setByeCount(0)}
-                style={{flex:1,padding:"10px",borderRadius:10,border:`2px solid ${byeCount===0?"#111":"#ddd"}`,background:byeCount===0?"#111":"#fff",color:byeCount===0?"#fff":"#555",fontWeight:700,fontSize:13,cursor:"pointer"}}>
-                No byes<br/><span style={{fontSize:11,fontWeight:400,opacity:.7}}>All {n} play R1</span>
-              </button>
-              <button onClick={()=>setByeCount(2)}
-                style={{flex:1,padding:"10px",borderRadius:10,border:`2px solid ${byeCount===2?"#111":"#ddd"}`,background:byeCount===2?"#111":"#fff",color:byeCount===2?"#fff":"#555",fontWeight:700,fontSize:13,cursor:"pointer"}}>
-                2 byes (S1 + S2)<br/><span style={{fontSize:11,fontWeight:400,opacity:.7}}>Seeds 3–{n} play R1</span>
-              </button>
-            </div>
-          )}
-          {byeCount > 0 && (
-            <div style={{marginTop:10,fontSize:12,color:"#2B8A3E"}}>
-              Auto-advancing: {byeTeamNames.join(", ")}
-            </div>
-          )}
-        </div>
+        {autoByes > 0 && (
+          <div style={{background:"#F0FBF4",border:"1px solid #2B8A3E22",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#2B8A3E",fontWeight:600}}>
+            ✓ {n} teams — top {autoByes} seed{autoByes>1?"s":""} auto-advance (skip Round 1):<br/>
+            <span style={{fontWeight:400,fontSize:12}}>{byeTeamNames.join(", ")}</span>
+          </div>
+        )}
 
-        {/* Seeding list */}
         <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:20}}>
           {seeded.map((t,i)=>{
-            const hasBye = i < byeCount;
+            const hasBye = i < autoByes;
             return (
               <div key={t.uid} draggable onDragStart={()=>onDragStart(i)} onDragOver={e=>onDragOver(e,i)} onDragEnd={()=>setDrag(null)}
                 style={{display:"flex",alignItems:"center",gap:10,background:drag===i?"#EEF5FF":hasBye?"#F0FBF4":"#fafafa",border:`1.5px solid ${drag===i?"#1971C2":hasBye?"#2B8A3E22":"#eee"}`,borderRadius:10,padding:"9px 12px",cursor:"grab",userSelect:"none"}}>
@@ -724,7 +776,6 @@ function SeedingModal({ teams, onConfirm, onClose }) {
           })}
         </div>
 
-        {/* R1 preview */}
         {r1.length > 0 && (
           <div style={{marginBottom:20}}>
             <div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Round 1 Matchups</div>
@@ -744,7 +795,7 @@ function SeedingModal({ teams, onConfirm, onClose }) {
 
         <div style={{display:"flex",gap:10}}>
           <button onClick={onClose} style={{flex:1,padding:11,borderRadius:10,border:"1.5px solid #ddd",background:"#fff",color:"#555",fontWeight:600,fontSize:14,cursor:"pointer"}}>Cancel</button>
-          <button onClick={()=>onConfirm(seeded, byeCount)} style={{flex:2,padding:11,borderRadius:10,border:"none",background:"#111",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Generate Bracket →</button>
+          <button onClick={()=>onConfirm(seeded, autoByes)} style={{flex:2,padding:11,borderRadius:10,border:"none",background:"#111",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Generate Bracket →</button>
         </div>
       </div>
     </div>
