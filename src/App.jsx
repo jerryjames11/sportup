@@ -179,12 +179,12 @@ function buildSingle(teams, byeCountOverride) {
   const byeTeams = seeded.slice(0, autoByes);  // top seeds get byes
   const actTeams = seeded.slice(autoByes);      // always a power of 2
 
-  // R1: pair highest vs lowest active seed
+  // R1: pair adjacent seeds — weakest together: (N)v(N-1), (N-2)v(N-3), ...
+  // e.g. 11 teams, 3 byes: active = S4..S11 → S4vS5, S6vS7, S8vS9, S10vS11
+  // Image shows: S11vS10, S9vS8, S7vS6, S5vS4 (same pairs, just displayed bottom-up)
   const r1 = [];
-  let lo = 0, hi = actTeams.length - 1;
-  while (lo < hi) {
-    r1.push({ a: actTeams[lo], b: actTeams[hi], scoreA:"", scoreB:"", auto:null, isBye:false });
-    lo++; hi--;
+  for (let i = actTeams.length - 1; i > 0; i -= 2) {
+    r1.push({ a: actTeams[i-1], b: actTeams[i], scoreA:"", scoreB:"", auto:null, isBye:false });
   }
 
   const rounds = [r1];
@@ -522,15 +522,15 @@ function DoubleBracket({ teams, byeCount }) {
       w[ri].forEach((m,mi)=>{ const wn=matchWinner(m),nx=w[ri+1]?.[Math.floor(mi/2)]; if(nx&&wn){const sl=mi%2===0?"a":"b"; if(nx[sl].uid!==wn.uid){nx[sl]=wn;nx.scoreA="";nx.scoreB="";}} });
     }
 
-    // LB R1: WB R1 losers pair high vs low seed
+    // LB R1: WB R1 losers pair adjacent (L1vL2, L3vL4 per image)
     if (l[0] && w[0]) {
-      const losers=w[0].map(m=>matchLoser(m)).filter(Boolean);
-      let lo=0,hi=losers.length-1,lmi=0;
-      while(lo<hi&&lmi<l[0].length){
-        const lm=l[0][lmi];
-        if(lm.a.uid!==losers[lo].uid){lm.a=losers[lo];lm.scoreA="";lm.scoreB="";}
-        if(lm.b.uid!==losers[hi].uid){lm.b=losers[hi];lm.scoreA="";lm.scoreB="";}
-        lo++;hi--;lmi++;
+      const losers = w[0].map(m => matchLoser(m)).filter(Boolean);
+      let lmi = 0;
+      for (let i = 0; i < losers.length - 1 && lmi < l[0].length; i += 2) {
+        const lm = l[0][lmi];
+        if (lm.a.uid !== losers[i].uid)   { lm.a=losers[i];   lm.scoreA=""; lm.scoreB=""; }
+        if (lm.b.uid !== losers[i+1].uid) { lm.b=losers[i+1]; lm.scoreA=""; lm.scoreB=""; }
+        lmi++;
       }
     }
 
